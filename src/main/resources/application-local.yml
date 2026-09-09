@@ -93,3 +93,10 @@ knowledge:
       connect-timeout: 5s
       request-timeout: 10s
       verification-limit: 10000
+    reranker:
+      enabled: ${KNOWLEDGE_RERANKER_ENABLED:true}
+      base-url: ${KNOWLEDGE_RERANKER_BASE_URL:http://127.0.0.1:8000}
+      top-k: 5
+      score-threshold: 0.15
+      connect-timeout: 2s
+      read-timeout: 8s
