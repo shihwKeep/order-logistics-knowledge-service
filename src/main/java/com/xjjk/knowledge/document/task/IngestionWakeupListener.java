@@ -15,7 +15,7 @@ public class IngestionWakeupListener {
     }
 
     @RabbitListener(queues = "${knowledge.document.ingestion.queue:knowledge.document.ingestion}")
-    public void onWakeup(long taskId) {
-        worker.process(taskId);
+    public void onWakeup(String taskId) {
+        worker.process(Long.parseLong(taskId));
     }
 }

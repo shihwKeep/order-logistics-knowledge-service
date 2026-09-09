@@ -23,7 +23,8 @@ public class OutboxPublisher {
     public void publishPending() {
         for (OutboxEvent event : mapper.findPending(properties.getScanBatchSize())) {
             try {
-                rabbitTemplate.convertAndSend(properties.getExchange(), properties.getRoutingKey(), event.taskId());
+                rabbitTemplate.convertAndSend(
+                        properties.getExchange(), properties.getRoutingKey(), Long.toString(event.taskId()));
                 mapper.markPublished(event.id());
             } catch (RuntimeException exception) {
                 mapper.markRetry(event.id());

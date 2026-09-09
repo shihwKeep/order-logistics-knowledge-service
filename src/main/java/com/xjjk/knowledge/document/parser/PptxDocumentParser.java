@@ -2,6 +2,8 @@ package com.xjjk.knowledge.document.parser;
 
 import com.xjjk.knowledge.common.api.ApiErrorCode;
 import com.xjjk.knowledge.common.error.BusinessException;
+import com.xjjk.knowledge.document.ocr.OcrClient;
+import com.xjjk.knowledge.document.ocr.OcrResult;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
@@ -13,18 +15,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /** PPTX 按幻灯片提取正文、表格与备注，并标记需要 OCR 的图片区域。 */
 @Component
 public class PptxDocumentParser implements DocumentParser {
+    private final OcrClient ocrClient;
     private final int maxSlides;
 
     @Autowired
-    public PptxDocumentParser(ParsingProperties properties) {
-        this(properties.getMaxSlides());
+    public PptxDocumentParser(OcrClient ocrClient, ParsingProperties properties) {
+        this(ocrClient, properties.getMaxSlides());
     }
 
-    PptxDocumentParser(int maxSlides) {
+    PptxDocumentParser(OcrClient ocrClient, int maxSlides) {
+        this.ocrClient = ocrClient;
         this.maxSlides = maxSlides;
     }
 
@@ -44,9 +49,20 @@ public class PptxDocumentParser implements DocumentParser {
             for (int slideIndex = 0; slideIndex < show.getSlides().size(); slideIndex++) {
                 var slide = show.getSlides().get(slideIndex);
                 List<String> blocks = new ArrayList<>();
+                List<Double> ocrConfidences = new ArrayList<>();
+                boolean slideLowConfidence = false;
                 for (XSLFShape shape : slide.getShapes()) {
-                    if (shape instanceof XSLFPictureShape) {
+                    if (shape instanceof XSLFPictureShape picture) {
                         ocrRequired = true;
+                        OcrResult result = ocrClient.recognize(
+                                UUID.randomUUID().toString(), "ch", picture.getPictureData().getData());
+                        if (!result.joinedText().isBlank()) {
+                            blocks.add("图片文字：" + result.joinedText());
+                        }
+                        if (result.averageConfidence() != null) {
+                            ocrConfidences.add(result.averageConfidence());
+                        }
+                        slideLowConfidence |= result.hasLowConfidence();
                     } else if (shape instanceof XSLFTable table) {
                         String tableText = table.getRows().stream()
                                 .map(row -> row.getCells().stream()
@@ -81,8 +97,10 @@ public class PptxDocumentParser implements DocumentParser {
                             "幻灯片 " + (slideIndex + 1),
                             blocks.getFirst(),
                             String.join("\n", blocks),
-                            null,
-                            false));
+                            ocrConfidences.isEmpty()
+                                    ? null
+                                    : ocrConfidences.stream().mapToDouble(Double::doubleValue).average().orElse(0D),
+                            slideLowConfidence));
                 }
             }
             return new ParsedDocument(units, ocrRequired);

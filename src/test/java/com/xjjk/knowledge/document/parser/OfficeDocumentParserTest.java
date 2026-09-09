@@ -18,6 +18,9 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.xjjk.knowledge.document.ocr.OcrBlock;
+import com.xjjk.knowledge.document.ocr.OcrResult;
+import java.util.List;
 
 class OfficeDocumentParserTest {
 
@@ -79,14 +82,18 @@ class OfficeDocumentParserTest {
             presentation = output.toByteArray();
         }
 
-        ParsedDocument parsed = new PptxDocumentParser(100).parse(new ParseRequest(
+        ParsedDocument parsed = new PptxDocumentParser(
+                (requestId, language, image) -> new OcrResult(
+                        requestId, 0, List.of(new OcrBlock("图片中的签收规范", 0.93, List.of(), false))),
+                100).parse(new ParseRequest(
                 "培训.pptx", "pptx",
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 presentation));
 
         assertThat(parsed.units()).hasSize(1);
         assertThat(parsed.units().getFirst().locationLabel()).isEqualTo("幻灯片 1");
-        assertThat(parsed.units().getFirst().text()).contains("物流异常处理", "破损件需要登记照片");
+        assertThat(parsed.units().getFirst().text())
+                .contains("物流异常处理", "破损件需要登记照片", "图片中的签收规范");
         assertThat(parsed.ocrRequired()).isTrue();
     }
 
