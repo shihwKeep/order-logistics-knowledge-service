@@ -4,16 +4,18 @@
 
 上传接口完成租户与知识库校验、文件签名校验、版本登记、MinIO 原件写入、数据库任务和 Outbox 登记。Outbox 投递 RabbitMQ 只负责唤醒 Worker；数据库定时扫描负责消息丢失、进程重启和租约过期后的恢复。
 
-Worker 按格式提取文本。PDF 有文本层时直接提取，扫描页和 PNG/JPEG 调用独立 PaddleOCR；Office、HTML、CSV、TXT 与 Markdown 使用格式专用解析器。解析结果先保存为可定位原文单元，再按标题、段落和表格结构形成 Chunk。当前版本处理至 `INDEXING` 后，等待下一阶段写入 Elasticsearch 与 Milvus。
+Worker 按格式提取文本。PDF 有文本层时直接提取，扫描页和 PNG/JPEG 调用独立 PaddleOCR；Office、HTML、CSV、TXT 与 Markdown 使用格式专用解析器。解析结果先保存为可定位原文单元，再按标题、段落和表格结构形成 Chunk，随后写入 Elasticsearch 草稿索引与 Milvus 草稿集合；两端数量和内容清单都与 MySQL 一致后，版本才进入 `READY`。
 
 ## 2. 启动基础设施
 
-仓库内 Compose 不包含或修改现有 MySQL、Redis、Elasticsearch、Milvus：
+仓库内 Compose 不包含或修改现有 MySQL、Redis；它会启动文档 MinIO、RabbitMQ、PaddleOCR、带 IK 的 Elasticsearch，以及使用独立内部 MinIO 的 Milvus：
 
 ```powershell
 $env:KNOWLEDGE_MINIO_ROOT_USER = Read-Host 'MinIO 用户名'
 $env:KNOWLEDGE_MINIO_ROOT_PASSWORD = Read-Host -MaskInput 'MinIO 密码'
 $env:KNOWLEDGE_RABBITMQ_PASSWORD = Read-Host -MaskInput 'RabbitMQ 密码'
+$env:KNOWLEDGE_MILVUS_MINIO_USER = Read-Host 'Milvus 内部 MinIO 用户名'
+$env:KNOWLEDGE_MILVUS_MINIO_PASSWORD = Read-Host -MaskInput 'Milvus 内部 MinIO 密码'
 docker compose -f compose.knowledge.yml up -d
 docker compose -f compose.knowledge.yml ps
 ```

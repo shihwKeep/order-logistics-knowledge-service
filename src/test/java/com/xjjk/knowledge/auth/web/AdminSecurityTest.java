@@ -39,6 +39,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 @WebMvcTest(
         controllers = AdminSecurityProbeController.class,
@@ -111,6 +112,19 @@ class AdminSecurityTest {
     }
 
     @Test
+    void disablePublicationForcesImmediateRoleRefresh() throws Exception {
+        when(sessionRepository.find("valid")).thenReturn(Optional.of(session));
+        when(roleRefresher.refreshIfRequired("valid", session, true)).thenReturn(session);
+
+        mvc.perform(post("/api/v1/admin/security-probe/disable")
+                        .with(csrf())
+                        .cookie(new jakarta.servlet.http.Cookie("KB_ADMIN_SESSION", "valid")))
+                .andExpect(status().isOk());
+
+        verify(roleRefresher).refreshIfRequired("valid", session, true);
+    }
+
+    @Test
     void staleRoleThatWasDisabledRejectsRequestAndDeletesSession() throws Exception {
         when(sessionRepository.find("valid")).thenReturn(Optional.of(session));
         when(roleRefresher.refreshIfRequired("valid", session, false))
@@ -156,6 +170,11 @@ class AdminSecurityProbeController {
     @PostMapping("/api/v1/admin/security-probe")
     ApiResponse<String> postProbe() {
         return ApiResponse.success("ok");
+    }
+
+    @PostMapping("/api/v1/admin/security-probe/disable")
+    ApiResponse<String> disableProbe() {
+        return ApiResponse.success("disabled");
     }
 
     @PostMapping("/api/v1/internal/security-probe")

@@ -1,6 +1,6 @@
 # 知识库服务基础阶段本地运行手册
 
-本文覆盖 SSPX 登录、角色鉴权、租户隔离、知识库管理，以及版本化文档上传、解析、OCR、预览和人工校正。Elasticsearch、Milvus 检索与手动发布流程在下一阶段接入。
+本文覆盖 SSPX 登录、角色鉴权、租户隔离、知识库管理，以及版本化文档上传、解析、OCR、预览和人工校正。混合检索、手动发布与回滚详见 `hybrid-retrieval-publication-runbook.md`。
 
 ## 1. 前置服务
 
@@ -11,6 +11,7 @@
 - SSPX 服务，默认地址 `http://127.0.0.1:8080`
 - SSPX 应用 444 下已给测试用户配置 `KNOWLEDGE_ADMIN` 或 `KNOWLEDGE_SUPER_ADMIN`
 - MinIO、RabbitMQ 与独立 PaddleOCR（可使用仓库内 `compose.knowledge.yml`）
+- Elasticsearch 8 + IK、Milvus、Ollama Qwen3 Embedding、BGE Reranker
 
 创建独立数据库：
 

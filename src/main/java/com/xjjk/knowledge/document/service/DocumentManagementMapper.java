@@ -48,11 +48,11 @@ public interface DocumentManagementMapper {
             @Param("unitId") long unitId);
 
     @Select("""
-            SELECT correction_revision FROM kb_document_version
+            SELECT correction_revision,status FROM kb_document_version
              WHERE tenant_id=#{tenantId} AND knowledge_base_id=#{knowledgeBaseId}
                AND document_id=#{documentId} AND id=#{versionId} FOR UPDATE
             """)
-    Integer lockCorrectionRevision(
+    CorrectionVersionState lockCorrectionState(
             @Param("tenantId") long tenantId,
             @Param("knowledgeBaseId") long knowledgeBaseId,
             @Param("documentId") long documentId,
