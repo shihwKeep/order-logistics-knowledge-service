@@ -6,6 +6,7 @@ import java.util.Optional;
 
 public interface DocumentManagementRepository {
     List<DocumentUnit> listUnits(long tenantId, long documentId, long versionId, Boolean lowConfidence, int offset, int limit);
+    List<DocumentChunkView> listChunks(long tenantId, long documentId, long versionId, int offset, int limit);
     DocumentUnit correctUnit(long tenantId, long knowledgeBaseId, long documentId, long versionId, long unitId,
                              String correctedText, long actorId, String requestId);
     Optional<IngestionTask> latestTask(long tenantId, long versionId);

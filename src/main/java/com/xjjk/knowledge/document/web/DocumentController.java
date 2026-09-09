@@ -9,6 +9,7 @@ import com.xjjk.knowledge.document.service.DocumentQueryService;
 import com.xjjk.knowledge.document.service.DocumentCorrectionService;
 import com.xjjk.knowledge.document.web.dto.CorrectDocumentUnitRequest;
 import com.xjjk.knowledge.document.web.dto.DocumentDetailResponse;
+import com.xjjk.knowledge.document.web.dto.DocumentChunkResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentUnitResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentVersionResponse;
@@ -131,6 +132,24 @@ public class DocumentController {
                         principal(authentication), tenantId, knowledgeBaseId, documentId, versionId,
                         lowConfidence, offset, limit)
                 .stream().map(DocumentUnitResponse::from).toList());
+    }
+
+    @GetMapping("/{documentId}/versions/{versionId}/chunks")
+    public ApiResponse<List<DocumentChunkResponse>> chunks(
+            @PathVariable @Positive long tenantId,
+            @PathVariable @Positive long knowledgeBaseId,
+            @PathVariable @Positive long documentId,
+            @PathVariable @Positive long versionId,
+            @RequestParam(value = "offset", defaultValue = "0") int offset,
+            @RequestParam(value = "limit", defaultValue = "20") int limit,
+            Authentication authentication,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        prepareRequestId(request, response);
+        return ApiResponse.success(queryService.chunks(
+                        principal(authentication), tenantId, knowledgeBaseId, documentId, versionId,
+                        offset, limit)
+                .stream().map(DocumentChunkResponse::from).toList());
     }
 
     @GetMapping("/{documentId}/versions/{versionId}/task")

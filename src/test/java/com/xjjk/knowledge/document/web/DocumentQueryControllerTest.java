@@ -12,6 +12,8 @@ import com.xjjk.knowledge.common.error.GlobalExceptionHandler;
 import com.xjjk.knowledge.document.service.DocumentCorrectionService;
 import com.xjjk.knowledge.document.service.DocumentQueryService;
 import com.xjjk.knowledge.document.service.DocumentUnit;
+import com.xjjk.knowledge.document.service.DocumentChunkView;
+import java.time.LocalDateTime;
 import com.xjjk.knowledge.document.service.DocumentUploadService;
 import java.util.List;
 import java.util.Set;
@@ -53,5 +55,23 @@ class DocumentQueryControllerTest {
                 .andExpect(jsonPath("$.data[0].id").value(9))
                 .andExpect(jsonPath("$.data[0].locationLabel").value("第 1 页"))
                 .andExpect(jsonPath("$.data[0].sourceObjectKey").doesNotExist());
+    }
+
+    @Test
+    void returnsVersionChunksWithoutEmbeddingOrObjectStorageMetadata() throws Exception {
+        when(query.chunks(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(2L), org.mockito.ArgumentMatchers.eq(3L),
+                org.mockito.ArgumentMatchers.eq(4L), org.mockito.ArgumentMatchers.eq(0),
+                org.mockito.ArgumentMatchers.eq(20)))
+                .thenReturn(List.of(new DocumentChunkView(
+                        10L, 9L, 0, "退款规则", "七日内可以申请退款", 12,
+                        "{\"pageNumber\":1}", LocalDateTime.now())));
+
+        mvc.perform(get("/api/v1/admin/tenants/1/knowledge-bases/2/documents/3/versions/4/chunks")
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].content").value("七日内可以申请退款"))
+                .andExpect(jsonPath("$.data[0].tokenCount").value(12))
+                .andExpect(jsonPath("$.data[0].embedding").doesNotExist());
     }
 }

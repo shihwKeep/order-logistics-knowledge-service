@@ -28,6 +28,12 @@ public class MybatisDocumentManagementRepository implements DocumentManagementRe
     }
 
     @Override
+    public List<DocumentChunkView> listChunks(
+            long tenantId, long documentId, long versionId, int offset, int limit) {
+        return mapper.listChunks(tenantId, documentId, versionId, offset, limit);
+    }
+
+    @Override
     @Transactional
     public DocumentUnit correctUnit(
             long tenantId, long knowledgeBaseId, long documentId, long versionId, long unitId,
