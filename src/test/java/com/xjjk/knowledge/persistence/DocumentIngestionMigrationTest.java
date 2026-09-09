@@ -49,6 +49,7 @@ class DocumentIngestionMigrationTest {
                 "kb_chunk",
                 "kb_ingestion_task",
                 "kb_outbox_event");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        assertThat(java.util.Arrays.stream(flyway.info().applied())
+                .map(info -> info.getVersion().getVersion())).contains("2");
     }
 }

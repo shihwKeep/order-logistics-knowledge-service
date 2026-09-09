@@ -46,7 +46,8 @@ class RetrievalPublicationMigrationTest {
                     "idx_search_tenant_created");
         }
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        assertThat(java.util.Arrays.stream(flyway.info().applied())
+                .map(info -> info.getVersion().getVersion())).contains("3");
     }
 
     private Set<String> tableNames(DatabaseMetaData metadata) throws Exception {

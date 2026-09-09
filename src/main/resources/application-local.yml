@@ -108,3 +108,7 @@ knowledge:
       keyword-weight: 1.0
       strict-rrf-threshold: 0.03
       version: qwen3-es-milvus-rrf60-bge-v1
+    publication-cleanup:
+      enabled: true
+      batch-size: 20
+      scan-delay: 5s
