@@ -9,6 +9,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -20,8 +21,9 @@ public class SpreadsheetDocumentParser implements DocumentParser {
     private final int maxSheets;
     private final int maxRowsPerSheet;
 
-    public SpreadsheetDocumentParser() {
-        this(100, 100_000);
+    @Autowired
+    public SpreadsheetDocumentParser(ParsingProperties properties) {
+        this(properties.getMaxSheets(), properties.getMaxRowsPerSheet());
     }
 
     SpreadsheetDocumentParser(int maxSheets, int maxRowsPerSheet) {

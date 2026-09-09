@@ -7,6 +7,7 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -19,8 +20,9 @@ import java.util.Locale;
 public class DocxDocumentParser implements DocumentParser {
     private final int maxUnits;
 
-    public DocxDocumentParser() {
-        this(10_000);
+    @Autowired
+    public DocxDocumentParser(ParsingProperties properties) {
+        this(properties.getMaxDocxUnits());
     }
 
     DocxDocumentParser(int maxUnits) {

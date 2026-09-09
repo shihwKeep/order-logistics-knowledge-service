@@ -26,8 +26,8 @@ public class PdfDocumentParser implements DocumentParser {
     private final int maxPages;
 
     @Autowired
-    public PdfDocumentParser(OcrClient ocrClient) {
-        this(ocrClient, 500);
+    public PdfDocumentParser(OcrClient ocrClient, ParsingProperties properties) {
+        this(ocrClient, properties.getMaxPages());
     }
 
     PdfDocumentParser(OcrClient ocrClient, int maxPages) {

@@ -8,6 +8,7 @@ import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFTable;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -18,8 +19,9 @@ import java.util.List;
 public class PptxDocumentParser implements DocumentParser {
     private final int maxSlides;
 
-    public PptxDocumentParser() {
-        this(500);
+    @Autowired
+    public PptxDocumentParser(ParsingProperties properties) {
+        this(properties.getMaxSlides());
     }
 
     PptxDocumentParser(int maxSlides) {

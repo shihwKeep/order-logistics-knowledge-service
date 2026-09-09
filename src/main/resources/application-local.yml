@@ -7,6 +7,12 @@ spring:
     redis:
       host: ${KNOWLEDGE_REDIS_HOST:127.0.0.1}
       port: ${KNOWLEDGE_REDIS_PORT:6380}
+  rabbitmq:
+    host: ${KNOWLEDGE_RABBITMQ_HOST:127.0.0.1}
+    port: ${KNOWLEDGE_RABBITMQ_PORT:5672}
+    username: ${KNOWLEDGE_RABBITMQ_USERNAME:knowledge}
+    password: ${KNOWLEDGE_RABBITMQ_PASSWORD}
+    virtual-host: ${KNOWLEDGE_RABBITMQ_VHOST:/}
 
 knowledge:
   sspx:
@@ -23,3 +29,38 @@ knowledge:
     role-cache-ttl: 5m
     touch-interval: 1m
     secure-cookie: ${KNOWLEDGE_SECURE_COOKIE:false}
+  document:
+    storage:
+      enabled: ${KNOWLEDGE_MINIO_ENABLED:true}
+      endpoint: ${KNOWLEDGE_MINIO_ENDPOINT:http://127.0.0.1:9000}
+      access-key: ${KNOWLEDGE_MINIO_ACCESS_KEY}
+      secret-key: ${KNOWLEDGE_MINIO_SECRET_KEY}
+      bucket: ${KNOWLEDGE_MINIO_BUCKET:knowledge-documents}
+      max-file-size: 100MB
+    ocr:
+      base-url: ${KNOWLEDGE_OCR_BASE_URL:http://127.0.0.1:8091}
+      connect-timeout: 2s
+      read-timeout: 30s
+      max-response-bytes: 2097152
+      low-confidence-threshold: 0.80
+    parsing:
+      max-pages: 500
+      max-slides: 500
+      max-sheets: 100
+      max-rows-per-sheet: 100000
+    chunking:
+      target-tokens: 500
+      max-tokens: 800
+      overlap-tokens: 80
+    ingestion:
+      enabled: ${KNOWLEDGE_INGESTION_ENABLED:true}
+      worker-id: ${KNOWLEDGE_WORKER_ID:knowledge-local}
+      lease-duration: 60s
+      retry-base-delay: 10s
+      max-retries: 5
+      scan-batch-size: 20
+      scan-delay: 5s
+      outbox-delay: 2s
+      exchange: knowledge.document
+      routing-key: ingestion.wakeup
+      queue: knowledge.document.ingestion
