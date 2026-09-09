@@ -10,6 +10,7 @@ import com.xjjk.knowledge.document.persistence.DocumentRepository;
 import com.xjjk.knowledge.document.processing.DocumentChunk;
 import com.xjjk.knowledge.document.processing.StructuralChunker;
 import com.xjjk.knowledge.document.storage.SourceObjectStore;
+import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
 import java.io.InputStream;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ public class IngestionWorker {
     private final DocumentParserRegistry parsers;
     private final IngestionArtifactRepository artifacts;
     private final StructuralChunker chunker;
+    private final DraftIndexingService indexing;
     private final IngestionProperties properties;
 
     public IngestionWorker(
@@ -32,6 +34,7 @@ public class IngestionWorker {
             DocumentParserRegistry parsers,
             IngestionArtifactRepository artifacts,
             StructuralChunker chunker,
+            DraftIndexingService indexing,
             IngestionProperties properties) {
         this.tasks = tasks;
         this.documents = documents;
@@ -39,6 +42,7 @@ public class IngestionWorker {
         this.parsers = parsers;
         this.artifacts = artifacts;
         this.chunker = chunker;
+        this.indexing = indexing;
         this.properties = properties;
     }
 
@@ -53,6 +57,10 @@ public class IngestionWorker {
             DocumentVersion version = documents.findVersion(
                             lease.tenantId(), lease.documentId(), lease.versionId())
                     .orElseThrow(() -> new IllegalStateException("任务对应的文档版本不存在"));
+            if ("INDEX".equals(lease.stage())) {
+                indexing.index(version);
+                return tasks.complete(lease.taskId(), lease.leaseToken());
+            }
             if ("CHUNK".equals(lease.stage())) {
                 ParsedDocument parsed = artifacts.loadEffectiveUnits(version);
                 List<DocumentChunk> chunks = chunker.chunk(

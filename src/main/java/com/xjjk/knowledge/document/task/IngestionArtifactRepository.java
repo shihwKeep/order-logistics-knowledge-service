@@ -8,6 +8,7 @@ import com.xjjk.knowledge.document.processing.TextNormalizer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +41,7 @@ public class IngestionArtifactRepository {
         mapper.markParsed(
                 version.tenantId(), version.documentId(), version.id(), parserVersion,
                 parsed.ocrRequired(), parsed.units().size(), chunks.size());
+        enqueueIndex(version);
     }
 
     public ParsedDocument loadEffectiveUnits(DocumentVersion version) {
@@ -60,6 +62,7 @@ public class IngestionArtifactRepository {
                 .forEach(entity -> unitIds.put(entity.getUnitIndex(), entity.getId()));
         insertChunks(version, chunks, unitIds);
         mapper.markRechunked(version.tenantId(), version.documentId(), version.id(), chunks.size());
+        enqueueIndex(version);
     }
 
     public void markFailed(long tenantId, long documentId, long versionId, String stage, String errorCode) {
@@ -76,6 +79,21 @@ public class IngestionArtifactRepository {
                     version.tenantId(), version.knowledgeBaseId(), version.documentId(), version.id(),
                     unitId, chunk.chunkIndex(), chunk.titlePath(), chunk.text(), chunk.estimatedTokens(),
                     chunk.sha256(), "{\"locationLabel\":\"" + jsonEscape(chunk.locationLabel()) + "\"}");
+        }
+    }
+
+    /**
+     * INDEX 任务按“版本 + 人工校正修订号”幂等登记。只有首次插入任务时才生成 Outbox，
+     * 避免 Worker 在完成回写前崩溃并重跑时重复制造唤醒事件。
+     */
+    private void enqueueIndex(DocumentVersion version) {
+        String taskKey = "INDEX:" + version.tenantId() + ":" + version.id() + ":" + version.correctionRevision();
+        if (mapper.insertIndexTask(
+                version.tenantId(), version.knowledgeBaseId(), version.documentId(), version.id(), taskKey) == 1) {
+            mapper.insertIndexOutbox(
+                    UUID.randomUUID().toString(), version.tenantId(), Long.toString(version.id()),
+                    "{\"tenantId\":" + version.tenantId() + ",\"versionId\":" + version.id()
+                            + ",\"stage\":\"INDEX\"}");
         }
     }
 

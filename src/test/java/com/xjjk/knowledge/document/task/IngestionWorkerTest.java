@@ -18,6 +18,7 @@ import com.xjjk.knowledge.document.persistence.DocumentRepository;
 import com.xjjk.knowledge.document.processing.ChunkingProperties;
 import com.xjjk.knowledge.document.processing.StructuralChunker;
 import com.xjjk.knowledge.document.storage.SourceObjectStore;
+import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
 import java.io.ByteArrayInputStream;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -35,6 +36,7 @@ class IngestionWorkerTest {
         DocumentParserRegistry parsers = mock(DocumentParserRegistry.class);
         DocumentParser parser = mock(DocumentParser.class);
         IngestionArtifactRepository artifacts = mock(IngestionArtifactRepository.class);
+        DraftIndexingService indexing = mock(DraftIndexingService.class);
         IngestionProperties properties = new IngestionProperties();
         properties.setLeaseDuration(Duration.ofSeconds(30));
         IngestionTaskLease lease = new IngestionTaskLease(7L, 1L, 2L, 3L, 4L, "PARSE", "token");
@@ -48,7 +50,7 @@ class IngestionWorkerTest {
         when(tasks.complete(7L, "token")).thenReturn(true);
         StructuralChunker chunker = new StructuralChunker(new ChunkingProperties(), text -> text.length());
         IngestionWorker worker = new IngestionWorker(
-                tasks, documents, objects, parsers, artifacts, chunker, properties);
+                tasks, documents, objects, parsers, artifacts, chunker, indexing, properties);
 
         assertThat(worker.process(7L)).isTrue();
 
@@ -64,6 +66,7 @@ class IngestionWorkerTest {
         DocumentParserRegistry parsers = mock(DocumentParserRegistry.class);
         DocumentParser parser = mock(DocumentParser.class);
         IngestionArtifactRepository artifacts = mock(IngestionArtifactRepository.class);
+        DraftIndexingService indexing = mock(DraftIndexingService.class);
         IngestionProperties properties = new IngestionProperties();
         IngestionTaskLease lease = new IngestionTaskLease(8L, 1L, 2L, 3L, 4L, "PARSE", "lease-8");
         when(tasks.claim(8L, properties.getWorkerId(), properties.getLeaseDuration())).thenReturn(Optional.of(lease));
@@ -75,7 +78,7 @@ class IngestionWorkerTest {
                 .when(parser).parse(any());
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, objects, parsers, artifacts,
-                new StructuralChunker(new ChunkingProperties(), String::length), properties);
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
 
         assertThat(worker.process(8L)).isFalse();
 
@@ -83,6 +86,27 @@ class IngestionWorkerTest {
         verify(tasks).fail(
                 8L, "lease-8", "DOCUMENT_OCR_FAILED", "文档文字识别失败",
                 properties.getMaxRetries(), properties.getRetryBaseDelay());
+    }
+
+    @Test
+    void indexesPreparedChunksAndCompletesIndexTask() {
+        IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
+        DocumentRepository documents = mock(DocumentRepository.class);
+        DraftIndexingService indexing = mock(DraftIndexingService.class);
+        IngestionProperties properties = new IngestionProperties();
+        IngestionTaskLease lease = new IngestionTaskLease(9L, 1L, 2L, 3L, 4L, "INDEX", "lease-9");
+        when(tasks.claim(9L, properties.getWorkerId(), properties.getLeaseDuration())).thenReturn(Optional.of(lease));
+        when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(version()));
+        when(tasks.complete(9L, "lease-9")).thenReturn(true);
+        IngestionWorker worker = new IngestionWorker(
+                tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class),
+                mock(IngestionArtifactRepository.class),
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
+
+        assertThat(worker.process(9L)).isTrue();
+
+        verify(indexing).index(any());
+        verify(tasks).complete(9L, "lease-9");
     }
 
     private static DocumentVersion version() {

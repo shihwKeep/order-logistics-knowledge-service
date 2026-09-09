@@ -9,6 +9,17 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface IngestionTaskMapper {
+    @Select("""
+            SELECT id, tenant_id, knowledge_base_id, document_id, version_id, stage, status,
+                   retry_count, next_run_at, lease_token, locked_by, locked_until, last_error_code
+              FROM kb_ingestion_task
+             WHERE tenant_id=#{tenantId} AND version_id=#{versionId}
+             ORDER BY id DESC LIMIT 1
+            """)
+    IngestionTask findLatestForVersion(
+            @Param("tenantId") long tenantId,
+            @Param("versionId") long versionId);
+
     @Select("SELECT id FROM kb_ingestion_task WHERE tenant_id=#{tenantId} AND version_id=#{versionId} ORDER BY id LIMIT 1")
     long findTaskId(@Param("tenantId") long tenantId, @Param("versionId") long versionId);
 

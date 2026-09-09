@@ -14,9 +14,23 @@ import com.xjjk.knowledge.document.processing.ConservativeTokenEstimator;
 import com.xjjk.knowledge.document.processing.StructuralChunker;
 import com.xjjk.knowledge.document.processing.TextNormalizer;
 import com.xjjk.knowledge.document.storage.SourceObjectStore;
+import com.xjjk.knowledge.retrieval.embedding.EmbeddingClient;
+import com.xjjk.knowledge.retrieval.embedding.EmbeddingProperties;
+import com.xjjk.knowledge.retrieval.index.IndexVerification;
+import com.xjjk.knowledge.retrieval.index.KeywordIndex;
+import com.xjjk.knowledge.retrieval.index.VectorIndex;
+import com.xjjk.knowledge.retrieval.indexing.ChunkIndexMapper;
+import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
+import com.xjjk.knowledge.retrieval.indexing.MybatisChunkIndexRepository;
+import com.xjjk.knowledge.retrieval.model.IndexChunk;
+import com.xjjk.knowledge.retrieval.model.IndexLayer;
+import com.xjjk.knowledge.retrieval.model.RecallCandidate;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -36,7 +50,7 @@ class IngestionPipelineIntegrationTest {
             .withDatabaseName("order_logistics_knowledge").withUsername("knowledge").withPassword("knowledge");
 
     @Test
-    void textUploadTaskReachesIndexingWithPersistedUnitsAndChunks() {
+    void textUploadRunsParseThenIndexAndReachesReady() {
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()).load().migrate();
         PooledDataSource dataSource = new PooledDataSource(
                 "com.mysql.cj.jdbc.Driver", MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
@@ -46,6 +60,7 @@ class IngestionPipelineIntegrationTest {
         configuration.addMapper(DocumentMapper.class);
         configuration.addMapper(IngestionTaskMapper.class);
         configuration.addMapper(IngestionArtifactMapper.class);
+        configuration.addMapper(ChunkIndexMapper.class);
         try (SqlSession session = new SqlSessionFactoryBuilder().build(configuration).openSession(true)) {
             DocumentMapper documentsMapper = session.getMapper(DocumentMapper.class);
             MybatisDocumentRepository documents = new MybatisDocumentRepository(documentsMapper);
@@ -55,6 +70,19 @@ class IngestionPipelineIntegrationTest {
                             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
             long taskId = session.getMapper(IngestionTaskMapper.class).findTaskId(1L, created.version().id());
             IngestionProperties properties = new IngestionProperties();
+            MemoryIndex keyword = new MemoryIndex();
+            MemoryIndex vector = new MemoryIndex();
+            EmbeddingProperties embeddingProperties = new EmbeddingProperties();
+            embeddingProperties.setDimension(4);
+            EmbeddingClient embeddings = new EmbeddingClient() {
+                @Override public List<List<Float>> embedDocuments(List<String> values) {
+                    return values.stream().map(value -> List.of(1F, 0F, 0F, 0F)).toList();
+                }
+                @Override public List<Float> embedQuery(String query) { throw new UnsupportedOperationException(); }
+            };
+            DraftIndexingService indexing = new DraftIndexingService(
+                    new MybatisChunkIndexRepository(session.getMapper(ChunkIndexMapper.class)),
+                    embeddings, embeddingProperties, keyword, vector);
             IngestionWorker worker = new IngestionWorker(
                     new MybatisIngestionTaskRepository(session.getMapper(IngestionTaskMapper.class)),
                     documents,
@@ -62,7 +90,7 @@ class IngestionPipelineIntegrationTest {
                     new DocumentParserRegistry(java.util.List.of(new TextDocumentParser())),
                     new IngestionArtifactRepository(session.getMapper(IngestionArtifactMapper.class), new TextNormalizer()),
                     new StructuralChunker(new ChunkingProperties(), new ConservativeTokenEstimator()),
-                    properties);
+                    indexing, properties);
 
             assertThat(worker.process(taskId)).isTrue();
             assertThat(documents.findVersion(1L, created.document().id(), created.version().id()).orElseThrow().status())
@@ -72,7 +100,35 @@ class IngestionPipelineIntegrationTest {
             IngestionTask completed = session.selectOne(
                     "com.xjjk.knowledge.document.task.IngestionTaskMapper.find", taskId);
             assertThat(completed.status()).isEqualTo("DONE");
+            IngestionTask indexTask = session.getMapper(IngestionTaskMapper.class)
+                    .findLatestForVersion(1L, created.version().id());
+            assertThat(indexTask.stage()).isEqualTo("INDEX");
+            assertThat(indexTask.status()).isEqualTo("PENDING");
+
+            assertThat(worker.process(indexTask.id())).isTrue();
+            var ready = documents.findVersion(1L, created.document().id(), created.version().id()).orElseThrow();
+            assertThat(ready.status()).isEqualTo(DocumentStatus.READY);
+            assertThat(ready.embeddingDimension()).isEqualTo(4);
+            assertThat(ready.indexManifestSha256()).hasSize(64);
         }
+    }
+
+    private static final class MemoryIndex implements KeywordIndex, VectorIndex {
+        private final Map<String, String> fingerprints = new LinkedHashMap<>();
+        @Override public void ensureReady() {}
+        @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks) {
+            fingerprints.clear();
+            chunks.forEach(chunk -> fingerprints.put(chunk.chunkId(), chunk.contentSha256()));
+        }
+        @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks, List<List<Float>> vectors) {
+            replaceVersion(layer, chunks);
+        }
+        @Override public List<RecallCandidate> search(IndexLayer layer, long tenantId, List<Long> ids, String query, int topK) { return List.of(); }
+        @Override public List<RecallCandidate> search(IndexLayer layer, long tenantId, List<Long> ids, List<Float> vector, int topK) { return List.of(); }
+        @Override public IndexVerification verifyVersion(IndexLayer layer, long tenantId, long documentId, long versionId) {
+            return new IndexVerification(fingerprints);
+        }
+        @Override public void deleteVersion(IndexLayer layer, long tenantId, long documentId, long versionId) {}
     }
 
     private record FixedObjectStore(byte[] content) implements SourceObjectStore {
