@@ -36,6 +36,33 @@ public class IngestionArtifactRepository {
             mapper.insertUnit(entity);
             unitIds.put(unit.unitIndex(), entity.getId());
         }
+        insertChunks(version, chunks, unitIds);
+        mapper.markParsed(
+                version.tenantId(), version.documentId(), version.id(), parserVersion,
+                parsed.ocrRequired(), parsed.units().size(), chunks.size());
+    }
+
+    public ParsedDocument loadEffectiveUnits(DocumentVersion version) {
+        List<ParsedUnit> units = mapper.listUnits(version.tenantId(), version.documentId(), version.id())
+                .stream()
+                .map(entity -> new ParsedUnit(
+                        entity.getUnitType(), entity.getUnitIndex(), entity.getLocationLabel(), entity.getTitlePath(),
+                        entity.getEffectiveText(), entity.getOcrConfidence(), entity.isLowConfidence()))
+                .toList();
+        return new ParsedDocument(units, version.ocrRequired());
+    }
+
+    @Transactional
+    public void replaceChunks(DocumentVersion version, List<DocumentChunk> chunks) {
+        mapper.deleteChunks(version.tenantId(), version.id());
+        Map<Integer, Long> unitIds = new HashMap<>();
+        mapper.listUnits(version.tenantId(), version.documentId(), version.id())
+                .forEach(entity -> unitIds.put(entity.getUnitIndex(), entity.getId()));
+        insertChunks(version, chunks, unitIds);
+        mapper.markRechunked(version.tenantId(), version.documentId(), version.id(), chunks.size());
+    }
+
+    private void insertChunks(DocumentVersion version, List<DocumentChunk> chunks, Map<Integer, Long> unitIds) {
         for (DocumentChunk chunk : chunks) {
             Long unitId = unitIds.get(chunk.sourceUnitIndex());
             if (unitId == null) {
@@ -46,9 +73,6 @@ public class IngestionArtifactRepository {
                     unitId, chunk.chunkIndex(), chunk.titlePath(), chunk.text(), chunk.estimatedTokens(),
                     chunk.sha256(), "{\"locationLabel\":\"" + jsonEscape(chunk.locationLabel()) + "\"}");
         }
-        mapper.markParsed(
-                version.tenantId(), version.documentId(), version.id(), parserVersion,
-                parsed.ocrRequired(), parsed.units().size(), chunks.size());
     }
 
     private DocumentUnitEntity toEntity(DocumentVersion version, ParsedUnit unit) {

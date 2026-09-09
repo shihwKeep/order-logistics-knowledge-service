@@ -17,4 +17,6 @@ public interface DocumentRepository {
     Optional<DocumentVersion> findVersion(long tenantId, long documentId, long versionId);
 
     List<KnowledgeDocument> listDocuments(long tenantId, long knowledgeBaseId);
+
+    List<DocumentVersion> listVersions(long tenantId, long documentId);
 }

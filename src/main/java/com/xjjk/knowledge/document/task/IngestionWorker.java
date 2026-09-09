@@ -53,6 +53,13 @@ public class IngestionWorker {
             DocumentVersion version = documents.findVersion(
                             lease.tenantId(), lease.documentId(), lease.versionId())
                     .orElseThrow(() -> new IllegalStateException("任务对应的文档版本不存在"));
+            if ("CHUNK".equals(lease.stage())) {
+                ParsedDocument parsed = artifacts.loadEffectiveUnits(version);
+                List<DocumentChunk> chunks = chunker.chunk(
+                        version.tenantId(), version.documentId(), version.id(), parsed.units());
+                artifacts.replaceChunks(version, chunks);
+                return tasks.complete(lease.taskId(), lease.leaseToken());
+            }
             byte[] content;
             try (InputStream source = objectStore.get(version.sourceObjectKey())) {
                 content = source.readAllBytes();

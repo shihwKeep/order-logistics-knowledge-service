@@ -99,6 +99,11 @@ public class MybatisDocumentRepository implements DocumentRepository {
                 .toList();
     }
 
+    @Override
+    public List<DocumentVersion> listVersions(long tenantId, long documentId) {
+        return mapper.listVersions(tenantId, documentId).stream().map(this::toDomain).toList();
+    }
+
     private KnowledgeDocument requireDocument(long tenantId, long documentId) {
         return findDocument(tenantId, documentId).orElseThrow();
     }

@@ -5,10 +5,23 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface IngestionArtifactMapper {
+    @Select("""
+            SELECT id,tenant_id,document_id,version_id,unit_type,unit_index,location_label,title_path,
+                   raw_text,effective_text,ocr_confidence,low_confidence,content_sha256
+              FROM kb_document_unit
+             WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND version_id=#{versionId}
+             ORDER BY unit_index
+            """)
+    java.util.List<DocumentUnitEntity> listUnits(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId);
+
     @Delete("DELETE FROM kb_chunk WHERE tenant_id=#{tenantId} AND version_id=#{versionId}")
     int deleteChunks(@Param("tenantId") long tenantId, @Param("versionId") long versionId);
 
@@ -61,5 +74,16 @@ public interface IngestionArtifactMapper {
             @Param("parserVersion") String parserVersion,
             @Param("ocrRequired") boolean ocrRequired,
             @Param("unitCount") int unitCount,
+            @Param("chunkCount") int chunkCount);
+
+    @Update("""
+            UPDATE kb_document_version SET status='INDEXING',chunk_strategy_version='structural-v1',
+                   chunk_count=#{chunkCount},failure_stage=NULL,last_error_code=NULL,last_error_message=NULL
+             WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND id=#{versionId}
+            """)
+    int markRechunked(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
             @Param("chunkCount") int chunkCount);
 }

@@ -154,4 +154,18 @@ public interface DocumentMapper {
     List<DocumentEntity> listDocuments(
             @Param("tenantId") long tenantId,
             @Param("knowledgeBaseId") long knowledgeBaseId);
+
+    @Select("""
+            SELECT id, tenant_id, knowledge_base_id, document_id, version_number, status,
+                   original_filename, file_extension, mime_type, file_size, source_sha256,
+                   source_object_key, parsed_object_key, parser_version, chunk_strategy_version,
+                   ocr_required, correction_revision, unit_count, chunk_count, failure_stage,
+                   last_error_code, last_error_message, created_by, created_at, updated_at
+              FROM kb_document_version
+             WHERE tenant_id=#{tenantId} AND document_id=#{documentId}
+             ORDER BY version_number DESC
+            """)
+    List<DocumentVersionEntity> listVersions(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId);
 }

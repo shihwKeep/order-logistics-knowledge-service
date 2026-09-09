@@ -16,6 +16,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /** 按页提取 PDF：优先使用文本层，仅对无文本或低密度页面进行 OCR。 */
 @Component
@@ -24,6 +25,7 @@ public class PdfDocumentParser implements DocumentParser {
     private final OcrClient ocrClient;
     private final int maxPages;
 
+    @Autowired
     public PdfDocumentParser(OcrClient ocrClient) {
         this(ocrClient, 500);
     }
