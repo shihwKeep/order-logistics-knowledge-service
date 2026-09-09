@@ -15,7 +15,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
-class FoundationMigrationTest {
+class DocumentIngestionMigrationTest {
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
@@ -24,7 +24,7 @@ class FoundationMigrationTest {
             .withPassword("knowledge");
 
     @Test
-    void preservesKnowledgeBaseAndAuditTablesAfterAllMigrations() throws Exception {
+    void createsAllVersionedDocumentIngestionTablesAtSchemaVersionTwo() throws Exception {
         Flyway flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .load();
@@ -32,7 +32,7 @@ class FoundationMigrationTest {
         flyway.migrate();
 
         Set<String> tableNames = new HashSet<>();
-        try (Connection connection = MYSQL.createConnection("");) {
+        try (Connection connection = MYSQL.createConnection("")) {
             DatabaseMetaData metadata = connection.getMetaData();
             try (ResultSet tables = metadata.getTables(
                     MYSQL.getDatabaseName(), null, "%", new String[]{"TABLE"})) {
@@ -43,9 +43,12 @@ class FoundationMigrationTest {
         }
 
         assertThat(tableNames).contains(
-                "flyway_schema_history",
-                "kb_knowledge_base",
-                "kb_audit_log");
+                "kb_document",
+                "kb_document_version",
+                "kb_document_unit",
+                "kb_chunk",
+                "kb_ingestion_task",
+                "kb_outbox_event");
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
     }
 }
