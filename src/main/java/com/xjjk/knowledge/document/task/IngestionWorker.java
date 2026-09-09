@@ -12,6 +12,7 @@ import com.xjjk.knowledge.document.processing.StructuralChunker;
 import com.xjjk.knowledge.document.storage.SourceObjectStore;
 import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
 import com.xjjk.knowledge.retrieval.indexing.IngestionLeaseLostException;
+import com.xjjk.knowledge.observation.KnowledgeMetrics;
 import java.io.InputStream;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,8 @@ public class IngestionWorker {
     private final StructuralChunker chunker;
     private final DraftIndexingService indexing;
     private final IngestionProperties properties;
+    private final IngestionBulkhead bulkhead;
+    private final KnowledgeMetrics metrics;
 
     public IngestionWorker(
             IngestionTaskRepository tasks,
@@ -36,7 +39,9 @@ public class IngestionWorker {
             IngestionArtifactRepository artifacts,
             StructuralChunker chunker,
             DraftIndexingService indexing,
-            IngestionProperties properties) {
+            IngestionProperties properties,
+            IngestionBulkhead bulkhead,
+            KnowledgeMetrics metrics) {
         this.tasks = tasks;
         this.documents = documents;
         this.objectStore = objectStore;
@@ -45,12 +50,38 @@ public class IngestionWorker {
         this.chunker = chunker;
         this.indexing = indexing;
         this.properties = properties;
+        this.bulkhead = bulkhead;
+        this.metrics = metrics;
     }
 
     public boolean process(long taskId) {
-        return tasks.claim(taskId, properties.getWorkerId(), properties.getLeaseDuration())
-                .map(this::processClaimed)
-                .orElse(false);
+        long startedAt = System.nanoTime();
+        if (!bulkhead.tryAcquire()) {
+            metrics.recordIngestionRejected();
+            return false;
+        }
+        String stage = "CLAIM";
+        String outcome = "FAILED";
+        try {
+            var claimed = tasks.claim(
+                    taskId, properties.getWorkerId(), properties.getLeaseDuration());
+            if (claimed.isEmpty()) {
+                outcome = "UNCLAIMED";
+                return false;
+            }
+            stage = claimed.get().stage();
+            boolean completed = processClaimed(claimed.get());
+            outcome = completed ? "SUCCESS" : "FAILED";
+            return completed;
+        } finally {
+            // 指标与许可都由最外层 finally 收口，数据库、解析器和索引异常均不会泄漏许可。
+            bulkhead.release();
+            metrics.recordIngestion(stage, outcome, elapsed(startedAt));
+        }
+    }
+
+    private long elapsed(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 
     private boolean processClaimed(IngestionTaskLease lease) {

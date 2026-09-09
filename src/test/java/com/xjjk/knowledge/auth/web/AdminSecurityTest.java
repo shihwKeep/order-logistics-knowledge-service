@@ -112,6 +112,32 @@ class AdminSecurityTest {
     }
 
     @Test
+    void prometheusMetricsRequireSuperAdminSession() throws Exception {
+        mvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isUnauthorized());
+
+        when(sessionRepository.find("admin")).thenReturn(Optional.of(session));
+        when(roleRefresher.refreshIfRequired("admin", session, false)).thenReturn(session);
+        mvc.perform(get("/actuator/prometheus")
+                        .cookie(new jakarta.servlet.http.Cookie("KB_ADMIN_SESSION", "admin")))
+                .andExpect(status().isForbidden());
+
+        AdminSession superAdminSession = new AdminSession(
+                new AdminPrincipal(
+                        10568L, "74681", "超级管理员", 1L,
+                        Set.of(KnowledgeRole.KNOWLEDGE_SUPER_ADMIN)),
+                "access", "refresh", session.accessTokenExpiresAt(), session.createdAt(),
+                session.lastAccessAt(), session.rolesVerifiedAt());
+        when(sessionRepository.find("super")).thenReturn(Optional.of(superAdminSession));
+        when(roleRefresher.refreshIfRequired("super", superAdminSession, false))
+                .thenReturn(superAdminSession);
+        mvc.perform(get("/actuator/prometheus")
+                        .cookie(new jakarta.servlet.http.Cookie("KB_ADMIN_SESSION", "super")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value("metrics-ok"));
+    }
+
+    @Test
     void disablePublicationForcesImmediateRoleRefresh() throws Exception {
         when(sessionRepository.find("valid")).thenReturn(Optional.of(session));
         when(roleRefresher.refreshIfRequired("valid", session, true)).thenReturn(session);
@@ -180,5 +206,10 @@ class AdminSecurityProbeController {
     @PostMapping("/api/v1/internal/security-probe")
     ApiResponse<String> internalProbe() {
         return ApiResponse.success("internal-ok");
+    }
+
+    @GetMapping("/actuator/prometheus")
+    ApiResponse<String> prometheusProbe() {
+        return ApiResponse.success("metrics-ok");
     }
 }

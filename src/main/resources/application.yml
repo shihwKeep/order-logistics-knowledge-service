@@ -8,7 +8,22 @@ server:
   port: ${KNOWLEDGE_SERVER_PORT:8084}
 
 management:
+  endpoint:
+    health:
+      show-details: when_authorized
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        knowledge.retrieval.duration: true
+        knowledge.ingestion.duration: true
+
+# 灾备恢复开关必须由维护命令显式打开，日常启动不能重复计算全库向量。
+knowledge:
+  maintenance:
+    rebuild-indexes-on-startup: false

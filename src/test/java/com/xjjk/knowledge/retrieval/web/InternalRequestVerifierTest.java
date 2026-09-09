@@ -50,8 +50,35 @@ class InternalRequestVerifierTest {
                 1L, 10567L, timestamp, "nonce-2", signature, "怎么退款", List.of(2L, 4L)))
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> verifier.verify(
+                2L, 10567L, timestamp, "nonce-2", signature, "怎么退款", List.of(2L, 3L)))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> verifier.verify(
+                1L, 99999L, timestamp, "nonce-2", signature, "怎么退款", List.of(2L, 3L)))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> verifier.verify(
                 1L, 10567L, NOW.minusSeconds(600).toEpochMilli(), "nonce-3", signature,
                 "怎么退款", List.of(2L, 3L)))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void failsClosedWhenReplayStoreIsUnavailable() throws Exception {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        @SuppressWarnings("unchecked") ValueOperations<String, String> values = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+                .thenThrow(new IllegalStateException("redis unavailable"));
+        InternalApiProperties properties = new InternalApiProperties();
+        properties.setEnabled(true);
+        properties.setSecret(SECRET);
+        InternalRequestVerifier verifier = new InternalRequestVerifier(
+                redis, properties, Clock.fixed(NOW, ZoneOffset.UTC));
+        long timestamp = NOW.toEpochMilli();
+        String signature = sign(
+                1L, 10567L, timestamp, "nonce-fail", "怎么退款", List.of());
+
+        assertThatThrownBy(() -> verifier.verify(
+                1L, 10567L, timestamp, "nonce-fail", signature, "怎么退款", List.of()))
                 .isInstanceOf(BusinessException.class);
     }
 

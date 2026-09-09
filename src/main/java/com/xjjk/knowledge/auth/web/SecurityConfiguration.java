@@ -43,6 +43,9 @@ public class SecurityConfiguration {
                         .ignoringRequestMatchers("/api/v1/internal/**"))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        // 指标可能暴露内部容量与故障状态，只允许超级管理员会话读取。
+                        .requestMatchers("/actuator/prometheus")
+                        .hasRole("KNOWLEDGE_SUPER_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/internal/knowledge/retrieve").permitAll()

@@ -22,6 +22,8 @@ import com.xjjk.knowledge.retrieval.index.VectorIndex;
 import com.xjjk.knowledge.retrieval.indexing.ChunkIndexMapper;
 import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
 import com.xjjk.knowledge.retrieval.indexing.MybatisChunkIndexRepository;
+import com.xjjk.knowledge.observation.KnowledgeMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.xjjk.knowledge.retrieval.model.IndexChunk;
 import com.xjjk.knowledge.retrieval.model.IndexLayer;
 import com.xjjk.knowledge.retrieval.model.RecallCandidate;
@@ -90,7 +92,9 @@ class IngestionPipelineIntegrationTest {
                     new DocumentParserRegistry(java.util.List.of(new TextDocumentParser())),
                     new IngestionArtifactRepository(session.getMapper(IngestionArtifactMapper.class), new TextNormalizer()),
                     new StructuralChunker(new ChunkingProperties(), new ConservativeTokenEstimator()),
-                    indexing, properties);
+                    indexing, properties,
+                    new IngestionBulkhead(properties),
+                    new KnowledgeMetrics(new SimpleMeterRegistry()));
 
             assertThat(worker.process(taskId)).isTrue();
             assertThat(documents.findVersion(1L, created.document().id(), created.version().id()).orElseThrow().status())

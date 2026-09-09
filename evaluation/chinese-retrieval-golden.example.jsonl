@@ -1,0 +1,5 @@
+{"id":"refund-window","question":"签收后多久可以申请退货？","expectedDocumentTitles":["售后退款规则"],"expectAnswerable":true}
+{"id":"logistics-delay","question":"物流长时间没有更新应该怎么处理？","expectedDocumentTitles":["物流异常处理规范"],"expectAnswerable":true}
+{"id":"invoice-process","question":"客户申请发票需要提供哪些资料？","expectedDocumentTitles":["发票开具流程"],"expectAnswerable":true}
+{"id":"product-publish","question":"商品上架前需要完成哪些检查？","expectedDocumentTitles":["商品上架规范"],"expectAnswerable":true}
+{"id":"deliberate-no-answer","question":"公司食堂周三供应什么菜？","expectedDocumentTitles":[],"expectAnswerable":false}

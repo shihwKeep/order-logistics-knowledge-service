@@ -8,6 +8,7 @@ import com.xjjk.knowledge.document.task.IngestionArtifactMapper;
 import com.xjjk.knowledge.document.task.IngestionTaskMapper;
 import com.xjjk.knowledge.knowledgebase.persistence.KnowledgeBaseMapper;
 import com.xjjk.knowledge.retrieval.indexing.ChunkIndexMapper;
+import com.xjjk.knowledge.retrieval.indexing.IndexRecoveryMapper;
 import com.xjjk.knowledge.retrieval.service.PublishedVersionMapper;
 import com.xjjk.knowledge.retrieval.service.SearchLogMapper;
 import com.xjjk.knowledge.publication.PublicationMapper;
@@ -60,6 +61,9 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private ChunkIndexMapper chunkIndexMapper;
+
+    @MockitoBean
+    private IndexRecoveryMapper indexRecoveryMapper;
 
     @MockitoBean
     private PublishedVersionMapper publishedVersionMapper;

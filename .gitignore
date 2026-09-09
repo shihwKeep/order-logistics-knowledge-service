@@ -5,3 +5,4 @@ target/
 .env.*
 !.env.example
 hs_err_pid*
+evaluation/*.local.jsonl

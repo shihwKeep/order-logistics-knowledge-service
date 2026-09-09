@@ -16,6 +16,8 @@ import com.xjjk.knowledge.retrieval.model.DegradationMode;
 import com.xjjk.knowledge.retrieval.rerank.Reranker;
 import com.xjjk.knowledge.retrieval.rerank.RerankerProperties;
 import com.xjjk.knowledge.retrieval.rerank.RerankerUnavailableException;
+import com.xjjk.knowledge.observation.KnowledgeMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 class HybridRetrievalServiceTest {
 
@@ -145,6 +148,38 @@ class HybridRetrievalServiceTest {
         verify(fixture.draftValidator).validate(eq(1L), anyList());
     }
 
+    @Test
+    void stalePublishedCandidatesCannotMakeTheAnswerAnswerable() {
+        Fixture fixture = new Fixture();
+        fixture.vector.result = List.of(candidate("stale", RecallSource.VECTOR));
+        fixture.keyword.result = List.of(candidate("stale", RecallSource.KEYWORD));
+        fixture.reranker = (query, values) -> values.stream()
+                .map(value -> value.withScore(0.9D)).toList();
+        when(fixture.validator.validate(eq(1L), anyList())).thenReturn(List.of());
+
+        var result = fixture.service().retrieve(
+                1L, 10567L, "request-stale", "退款规则", List.of());
+
+        assertThat(result.answerable()).isFalse();
+        assertThat(result.resultCode()).isEqualTo("NO_RELEVANT_EVIDENCE");
+    }
+
+    @Test
+    void searchLogFailureCannotBreakAnOtherwiseValidAnswer() {
+        Fixture fixture = new Fixture();
+        fixture.vector.result = List.of(candidate("shared", RecallSource.VECTOR));
+        fixture.keyword.result = List.of(candidate("shared", RecallSource.KEYWORD));
+        fixture.reranker = (query, values) -> values.stream()
+                .map(value -> value.withScore(0.9D)).toList();
+        doThrow(new IllegalStateException("database unavailable"))
+                .when(fixture.searchLogs).record(org.mockito.ArgumentMatchers.any());
+
+        var result = fixture.service().retrieve(
+                1L, 10567L, "request-log-failure", "退款规则", List.of());
+
+        assertThat(result.answerable()).isTrue();
+    }
+
     private static RecallCandidate candidate(String id, RecallSource source) {
         return new RecallCandidate(new IndexChunk(
                 id, 1L, 2L, 3L, 4L, 0, "退款规则", "售后", "正文", "hash", "{}"),
@@ -177,7 +212,8 @@ class HybridRetrievalServiceTest {
             RerankerProperties rerankerProperties = new RerankerProperties();
             return new HybridRetrievalService(
                     embeddings, keyword, vector, new RrfFusion(), reranker, rerankerProperties,
-                    properties, validator, draftValidator, searchLogs);
+                    properties, validator, draftValidator, searchLogs,
+                    new KnowledgeMetrics(new SimpleMeterRegistry()));
         }
     }
 

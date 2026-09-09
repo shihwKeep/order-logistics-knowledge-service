@@ -1,6 +1,7 @@
 package com.xjjk.knowledge.document.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -10,6 +11,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.times;
 
 import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
@@ -22,6 +25,8 @@ import com.xjjk.knowledge.document.processing.ChunkingProperties;
 import com.xjjk.knowledge.document.processing.StructuralChunker;
 import com.xjjk.knowledge.document.storage.SourceObjectStore;
 import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
+import com.xjjk.knowledge.observation.KnowledgeMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -30,6 +35,50 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class IngestionWorkerTest {
+
+    @Test
+    void saturatedBulkheadDoesNotClaimDatabaseLease() {
+        IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
+        IngestionProperties properties = new IngestionProperties();
+        properties.setMaxConcurrentTasks(1);
+        IngestionBulkhead bulkhead = new IngestionBulkhead(properties);
+        assertThat(bulkhead.tryAcquire()).isTrue();
+        try {
+            IngestionWorker worker = new IngestionWorker(
+                    tasks, mock(DocumentRepository.class), mock(SourceObjectStore.class),
+                    mock(DocumentParserRegistry.class), mock(IngestionArtifactRepository.class),
+                    new StructuralChunker(new ChunkingProperties(), String::length),
+                    mock(DraftIndexingService.class), properties, bulkhead, metrics());
+
+            assertThat(worker.process(99L)).isFalse();
+
+            verifyNoInteractions(tasks);
+        } finally {
+            bulkhead.release();
+        }
+    }
+
+    @Test
+    void releasesBulkheadPermitWhenClaimThrows() {
+        IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
+        IngestionProperties properties = new IngestionProperties();
+        when(tasks.claim(100L, properties.getWorkerId(), properties.getLeaseDuration()))
+                .thenThrow(new IllegalStateException("database unavailable"))
+                .thenReturn(Optional.empty());
+        IngestionBulkhead bulkhead = new IngestionBulkhead(properties);
+        IngestionWorker worker = new IngestionWorker(
+                tasks, mock(DocumentRepository.class), mock(SourceObjectStore.class),
+                mock(DocumentParserRegistry.class), mock(IngestionArtifactRepository.class),
+                new StructuralChunker(new ChunkingProperties(), String::length),
+                mock(DraftIndexingService.class), properties, bulkhead, metrics());
+
+        assertThatThrownBy(() -> worker.process(100L))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(worker.process(100L)).isFalse();
+
+        verify(tasks, times(2)).claim(
+                100L, properties.getWorkerId(), properties.getLeaseDuration());
+    }
 
     @Test
     void parsesReplacesArtifactsAndCompletesWithLeaseToken() {
@@ -53,7 +102,8 @@ class IngestionWorkerTest {
         when(tasks.complete(7L, "token")).thenReturn(true);
         StructuralChunker chunker = new StructuralChunker(new ChunkingProperties(), text -> text.length());
         IngestionWorker worker = new IngestionWorker(
-                tasks, documents, objects, parsers, artifacts, chunker, indexing, properties);
+                tasks, documents, objects, parsers, artifacts, chunker, indexing, properties,
+                new IngestionBulkhead(properties), metrics());
 
         assertThat(worker.process(7L)).isTrue();
 
@@ -82,7 +132,8 @@ class IngestionWorkerTest {
         when(artifacts.markFailedIfOwned(any(), any(), any(), any())).thenReturn(true);
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, objects, parsers, artifacts,
-                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties,
+                new IngestionBulkhead(properties), metrics());
 
         assertThat(worker.process(8L)).isFalse();
 
@@ -116,7 +167,8 @@ class IngestionWorkerTest {
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class),
                 artifacts,
-                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties,
+                new IngestionBulkhead(properties), metrics());
 
         assertThat(worker.process(9L)).isTrue();
 
@@ -143,7 +195,8 @@ class IngestionWorkerTest {
                 .when(indexing).index(any(), any(), anyLong(), any());
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class), artifacts,
-                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties,
+                new IngestionBulkhead(properties), metrics());
 
         assertThat(worker.process(10L)).isFalse();
 
@@ -158,5 +211,9 @@ class IngestionWorkerTest {
                 "refund.txt", "txt", "text/plain", 12L, "sha", "source-key",
                 null, null, null, null, null, null, null, null, false, 0, 0, 0,
                 null, null, null, 10567L, now, now);
+    }
+
+    private static KnowledgeMetrics metrics() {
+        return new KnowledgeMetrics(new SimpleMeterRegistry());
     }
 }

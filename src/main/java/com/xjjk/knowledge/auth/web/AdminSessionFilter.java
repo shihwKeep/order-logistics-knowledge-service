@@ -47,7 +47,10 @@ public class AdminSessionFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/v1/admin/");
+        String path = request.getRequestURI();
+        // Prometheus 端点与管理 API 共用服务端会话鉴权，其余 Actuator 端点不读取 Cookie。
+        return !path.startsWith("/api/v1/admin/")
+                && !"/actuator/prometheus".equals(path);
     }
 
     @Override

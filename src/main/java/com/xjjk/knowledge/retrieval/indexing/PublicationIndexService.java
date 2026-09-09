@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 
-/** 发布前构造并校验线上双索引；本类不改 MySQL 发布指针。 */
+/** 构造并校验指定索引层；本类只重建派生索引，不改 MySQL 版本状态或发布指针。 */
 @Service
 public class PublicationIndexService {
     private final ChunkIndexRepository chunks;
@@ -35,10 +35,19 @@ public class PublicationIndexService {
     }
 
     public void preparePublished(DocumentVersion version) {
+        prepare(version, IndexLayer.PUBLISHED);
+    }
+
+    /** 灾备恢复时依据 MySQL Chunk 重建当前草稿层，不改变草稿状态。 */
+    public void prepareDraft(DocumentVersion version) {
+        prepare(version, IndexLayer.DRAFT);
+    }
+
+    private void prepare(DocumentVersion version, IndexLayer layer) {
         validateEmbeddingContract(version);
         List<IndexChunk> values = chunks.loadVersionChunks(version);
         if (values.isEmpty() || values.size() != version.chunkCount()) {
-            throw new IllegalStateException("发布版本的 MySQL Chunk 数量不一致");
+            throw new IllegalStateException("待恢复版本的 MySQL Chunk 数量不一致");
         }
         String manifest = IndexManifest.sha256(values);
         if (!manifest.equals(version.indexManifestSha256())) {
@@ -48,16 +57,16 @@ public class PublicationIndexService {
                 values.stream().map(IndexChunk::content).toList());
         keywordIndex.ensureReady();
         vectorIndex.ensureReady();
-        keywordIndex.replaceVersion(IndexLayer.PUBLISHED, values);
-        vectorIndex.replaceVersion(IndexLayer.PUBLISHED, values, vectors);
+        keywordIndex.replaceVersion(layer, values);
+        vectorIndex.replaceVersion(layer, values, vectors);
 
         Map<String, String> expected = IndexManifest.fingerprints(values);
         Map<String, String> keywordActual = keywordIndex.verifyVersion(
-                IndexLayer.PUBLISHED, version.tenantId(), version.documentId(), version.id()).fingerprints();
+                layer, version.tenantId(), version.documentId(), version.id()).fingerprints();
         Map<String, String> vectorActual = vectorIndex.verifyVersion(
-                IndexLayer.PUBLISHED, version.tenantId(), version.documentId(), version.id()).fingerprints();
+                layer, version.tenantId(), version.documentId(), version.id()).fingerprints();
         if (!expected.equals(keywordActual) || !expected.equals(vectorActual)) {
-            throw new IllegalStateException("发布层 ES/Milvus 索引校验未通过");
+            throw new IllegalStateException(layer + " 层 ES/Milvus 索引校验未通过");
         }
     }
 

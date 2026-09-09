@@ -14,6 +14,7 @@ import com.xjjk.knowledge.retrieval.model.RetrievalResult;
 import com.xjjk.knowledge.retrieval.rerank.Reranker;
 import com.xjjk.knowledge.retrieval.rerank.RerankerProperties;
 import com.xjjk.knowledge.retrieval.rerank.RerankerUnavailableException;
+import com.xjjk.knowledge.observation.KnowledgeMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class HybridRetrievalService {
     private final PublishedVersionValidator publishedValidator;
     private final DraftVersionValidator draftValidator;
     private final SearchLogRecorder searchLogs;
+    private final KnowledgeMetrics metrics;
 
     public HybridRetrievalService(
             EmbeddingClient embeddings,
@@ -46,7 +48,8 @@ public class HybridRetrievalService {
             RetrievalProperties properties,
             PublishedVersionValidator publishedValidator,
             DraftVersionValidator draftValidator,
-            SearchLogRecorder searchLogs) {
+            SearchLogRecorder searchLogs,
+            KnowledgeMetrics metrics) {
         this.embeddings = embeddings;
         this.keywordIndex = keywordIndex;
         this.vectorIndex = vectorIndex;
@@ -57,6 +60,7 @@ public class HybridRetrievalService {
         this.publishedValidator = publishedValidator;
         this.draftValidator = draftValidator;
         this.searchLogs = searchLogs;
+        this.metrics = metrics;
     }
 
     public RetrievalResult retrieve(
@@ -108,6 +112,9 @@ public class HybridRetrievalService {
             recordSafely(new SearchLogEntry(
                     tenantId, userId, requestId, properties.getVersion(), DegradationMode.ALL_RECALL_UNAVAILABLE,
                     ApiErrorCode.KNOWLEDGE_SERVICE_UNAVAILABLE.code(), false, 0, 0, 0, 0, elapsed(startedAt)));
+            metrics.recordRetrieval(
+                    DegradationMode.ALL_RECALL_UNAVAILABLE.name(),
+                    ApiErrorCode.KNOWLEDGE_SERVICE_UNAVAILABLE.code(), elapsed(startedAt));
             throw new BusinessException(ApiErrorCode.KNOWLEDGE_SERVICE_UNAVAILABLE);
         }
 
@@ -151,6 +158,7 @@ public class HybridRetrievalService {
         recordSafely(new SearchLogEntry(
                 tenantId, userId, requestId, properties.getVersion(), degradation, resultCode, answerable,
                 vectorCandidates.size(), keywordCandidates.size(), fused.size(), evidences.size(), elapsed(startedAt)));
+        metrics.recordRetrieval(degradation.name(), resultCode, elapsed(startedAt));
         return result;
     }
 

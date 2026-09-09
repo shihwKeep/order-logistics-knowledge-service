@@ -26,7 +26,7 @@ class ConfigurationContractTest {
                 .contains("max-file-size: 100MB")
                 .contains("lease-duration: 60s")
                 .contains("target-tokens: 500")
-                .doesNotContain("5034B830E7032AE112DBC8D45149AF5D585BCF14D242D9439BC2416A4361AA3F");
+                .doesNotMatch("(?s).*internal-api:\\s*.*secret:\\s*[A-Fa-f0-9]{32,}.*");
         assertThat(runbookPath).exists();
 
         String runbook = Files.readString(runbookPath);
