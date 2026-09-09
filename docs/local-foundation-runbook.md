@@ -1,6 +1,6 @@
 # 知识库服务基础阶段本地运行手册
 
-本文只覆盖知识库管理基础能力：SSPX 登录、角色鉴权、租户隔离、知识库增删改查和审计。文档解析、OCR、Elasticsearch、Milvus 与发布流程将在后续阶段接入。
+本文覆盖 SSPX 登录、角色鉴权、租户隔离、知识库管理，以及版本化文档上传、解析、OCR、预览和人工校正。Elasticsearch、Milvus 检索与手动发布流程在下一阶段接入。
 
 ## 1. 前置服务
 
@@ -10,6 +10,7 @@
 - Redis，默认本地端口 `6380`
 - SSPX 服务，默认地址 `http://127.0.0.1:8080`
 - SSPX 应用 444 下已给测试用户配置 `KNOWLEDGE_ADMIN` 或 `KNOWLEDGE_SUPER_ADMIN`
+- MinIO、RabbitMQ 与独立 PaddleOCR（可使用仓库内 `compose.knowledge.yml`）
 
 创建独立数据库：
 
@@ -27,6 +28,9 @@ CREATE DATABASE IF NOT EXISTS order_logistics_knowledge
 ```powershell
 $env:SPRING_PROFILES_ACTIVE='local'
 $env:SSPX_CLIENT_SECRET = Read-Host -MaskInput 'SSPX Client Secret'
+$env:KNOWLEDGE_MINIO_ACCESS_KEY = Read-Host 'MinIO Access Key'
+$env:KNOWLEDGE_MINIO_SECRET_KEY = Read-Host -MaskInput 'MinIO Secret Key'
+$env:KNOWLEDGE_RABBITMQ_PASSWORD = Read-Host -MaskInput 'RabbitMQ Password'
 mvn spring-boot:run
 ```
 
@@ -44,6 +48,12 @@ SSPX_CLIENT_ID
 SSPX_CLIENT_SECRET
 SSPX_APPLICATION_ID
 KNOWLEDGE_SECURE_COOKIE
+KNOWLEDGE_MINIO_ENDPOINT
+KNOWLEDGE_MINIO_ACCESS_KEY
+KNOWLEDGE_MINIO_SECRET_KEY
+KNOWLEDGE_RABBITMQ_HOST
+KNOWLEDGE_RABBITMQ_PASSWORD
+KNOWLEDGE_OCR_BASE_URL
 ```
 
 默认健康检查地址：`http://127.0.0.1:8084/actuator/health`。

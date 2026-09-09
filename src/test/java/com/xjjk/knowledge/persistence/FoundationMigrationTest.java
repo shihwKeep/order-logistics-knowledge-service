@@ -24,7 +24,7 @@ class FoundationMigrationTest {
             .withPassword("knowledge");
 
     @Test
-    void createsKnowledgeBaseAndAuditTablesAtSchemaVersionOne() throws Exception {
+    void preservesKnowledgeBaseAndAuditTablesAfterAllMigrations() throws Exception {
         Flyway flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .load();
@@ -46,6 +46,6 @@ class FoundationMigrationTest {
                 "flyway_schema_history",
                 "kb_knowledge_base",
                 "kb_audit_log");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
     }
 }

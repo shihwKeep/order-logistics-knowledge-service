@@ -1,0 +1,85 @@
+package com.xjjk.knowledge.document.task;
+
+import com.xjjk.knowledge.common.error.BusinessException;
+import com.xjjk.knowledge.document.domain.DocumentVersion;
+import com.xjjk.knowledge.document.parser.DocumentParser;
+import com.xjjk.knowledge.document.parser.DocumentParserRegistry;
+import com.xjjk.knowledge.document.parser.ParseRequest;
+import com.xjjk.knowledge.document.parser.ParsedDocument;
+import com.xjjk.knowledge.document.persistence.DocumentRepository;
+import com.xjjk.knowledge.document.processing.DocumentChunk;
+import com.xjjk.knowledge.document.processing.StructuralChunker;
+import com.xjjk.knowledge.document.storage.SourceObjectStore;
+import java.io.InputStream;
+import java.util.List;
+import org.springframework.stereotype.Component;
+
+/** 单个任务的完整处理边界；先持有数据库租约，再读取原件并幂等替换派生数据。 */
+@Component
+public class IngestionWorker {
+    private final IngestionTaskRepository tasks;
+    private final DocumentRepository documents;
+    private final SourceObjectStore objectStore;
+    private final DocumentParserRegistry parsers;
+    private final IngestionArtifactRepository artifacts;
+    private final StructuralChunker chunker;
+    private final IngestionProperties properties;
+
+    public IngestionWorker(
+            IngestionTaskRepository tasks,
+            DocumentRepository documents,
+            SourceObjectStore objectStore,
+            DocumentParserRegistry parsers,
+            IngestionArtifactRepository artifacts,
+            StructuralChunker chunker,
+            IngestionProperties properties) {
+        this.tasks = tasks;
+        this.documents = documents;
+        this.objectStore = objectStore;
+        this.parsers = parsers;
+        this.artifacts = artifacts;
+        this.chunker = chunker;
+        this.properties = properties;
+    }
+
+    public boolean process(long taskId) {
+        return tasks.claim(taskId, properties.getWorkerId(), properties.getLeaseDuration())
+                .map(this::processClaimed)
+                .orElse(false);
+    }
+
+    private boolean processClaimed(IngestionTaskLease lease) {
+        try {
+            DocumentVersion version = documents.findVersion(
+                            lease.tenantId(), lease.documentId(), lease.versionId())
+                    .orElseThrow(() -> new IllegalStateException("任务对应的文档版本不存在"));
+            if ("CHUNK".equals(lease.stage())) {
+                ParsedDocument parsed = artifacts.loadEffectiveUnits(version);
+                List<DocumentChunk> chunks = chunker.chunk(
+                        version.tenantId(), version.documentId(), version.id(), parsed.units());
+                artifacts.replaceChunks(version, chunks);
+                return tasks.complete(lease.taskId(), lease.leaseToken());
+            }
+            byte[] content;
+            try (InputStream source = objectStore.get(version.sourceObjectKey())) {
+                content = source.readAllBytes();
+            }
+            DocumentParser parser = parsers.select(version.fileExtension(), version.mimeType());
+            ParsedDocument parsed = parser.parse(new ParseRequest(
+                    version.originalFilename(), version.fileExtension(), version.mimeType(), content));
+            List<DocumentChunk> chunks = chunker.chunk(
+                    version.tenantId(), version.documentId(), version.id(), parsed.units());
+            artifacts.replaceParsedArtifacts(version, parsed, chunks, parser.version());
+            return tasks.complete(lease.taskId(), lease.leaseToken());
+        } catch (Exception exception) {
+            String code = exception instanceof BusinessException business
+                    ? business.errorCode().code() : "DOCUMENT_INGESTION_FAILED";
+            artifacts.markFailed(
+                    lease.tenantId(), lease.documentId(), lease.versionId(), lease.stage(), code);
+            tasks.fail(
+                    lease.taskId(), lease.leaseToken(), code, exception.getMessage(),
+                    properties.getMaxRetries(), properties.getRetryBaseDelay());
+            return false;
+        }
+    }
+}

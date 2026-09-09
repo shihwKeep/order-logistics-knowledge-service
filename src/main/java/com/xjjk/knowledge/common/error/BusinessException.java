@@ -20,6 +20,11 @@ public class BusinessException extends RuntimeException {
         this.errorCode = Objects.requireNonNull(errorCode, "errorCode");
     }
 
+    public BusinessException(ApiErrorCode errorCode, Throwable cause) {
+        super(errorCode.message(), cause);
+        this.errorCode = Objects.requireNonNull(errorCode, "errorCode");
+    }
+
     public ApiErrorCode errorCode() {
         return errorCode;
     }
