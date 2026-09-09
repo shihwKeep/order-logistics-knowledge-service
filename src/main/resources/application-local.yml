@@ -100,3 +100,11 @@ knowledge:
       score-threshold: 0.15
       connect-timeout: 2s
       read-timeout: 8s
+    strategy:
+      recall-top-k: 30
+      fusion-top-k: 20
+      final-top-k: 5
+      vector-weight: 1.0
+      keyword-weight: 1.0
+      strict-rrf-threshold: 0.03
+      version: qwen3-es-milvus-rrf60-bge-v1
