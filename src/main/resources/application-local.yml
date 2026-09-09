@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: ${KNOWLEDGE_DB_URL:jdbc:mysql://127.0.0.1:3307/order_logistics_knowledge?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${KNOWLEDGE_DB_USERNAME:root}
+    password: ${KNOWLEDGE_DB_PASSWORD:root}
+  data:
+    redis:
+      host: ${KNOWLEDGE_REDIS_HOST:127.0.0.1}
+      port: ${KNOWLEDGE_REDIS_PORT:6380}
+
+knowledge:
+  sspx:
+    base-url: ${SSPX_BASE_URL:http://127.0.0.1:8080}
+    client-id: ${SSPX_CLIENT_ID:100006}
+    client-secret: ${SSPX_CLIENT_SECRET}
+    application-id: ${SSPX_APPLICATION_ID:444}
+    connect-timeout: 2s
+    read-timeout: 4s
+  admin-session:
+    cookie-name: KB_ADMIN_SESSION
+    idle-timeout: 30m
+    absolute-timeout: 8h
+    role-cache-ttl: 5m
+    touch-interval: 1m
+    secure-cookie: ${KNOWLEDGE_SECURE_COOKIE:false}
