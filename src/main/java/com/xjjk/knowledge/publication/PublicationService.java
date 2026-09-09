@@ -57,7 +57,25 @@ public class PublicationService {
             return requireMatchingDuplicate(
                     duplicate.get(), PublicationAction.DISABLE, knowledgeBaseId, documentId, null);
         }
-        PublicationTarget target = repository.loadCurrentPublishedTarget(tenantId, knowledgeBaseId, documentId);
+        PublicationTarget target;
+        try {
+            // 此调用会锁住文档行。并发的首个停用请求可能在我们等待锁期间已经清空发布指针，
+            // 此时仓储会抛出冲突，但事务仍持有刚取得的文档锁，下面必须先做幂等重读。
+            target = repository.loadCurrentPublishedTarget(tenantId, knowledgeBaseId, documentId);
+        } catch (BusinessException conflictAfterLock) {
+            duplicate = repository.findByRequestForUpdate(tenantId, requestId);
+            if (duplicate.isPresent()) {
+                return requireMatchingDuplicate(
+                        duplicate.get(), PublicationAction.DISABLE, knowledgeBaseId, documentId, null);
+            }
+            throw conflictAfterLock;
+        }
+        // 发布指针尚未被清空时也要锁后重读，覆盖另一请求已提交但当前事务首次读取未看到的情况。
+        duplicate = repository.findByRequestForUpdate(tenantId, requestId);
+        if (duplicate.isPresent()) {
+            return requireMatchingDuplicate(
+                    duplicate.get(), PublicationAction.DISABLE, knowledgeBaseId, documentId, null);
+        }
         PublicationRecord record = repository.disable(target, principal.userId(), requestId);
         audit.success(tenantId, principal, AuditAction.DOCUMENT_DISABLE, "DOCUMENT", Long.toString(documentId),
                 requestId, Map.of("versionId", target.version().id()));

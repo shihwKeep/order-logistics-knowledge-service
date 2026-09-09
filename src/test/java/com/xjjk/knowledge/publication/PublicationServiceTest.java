@@ -158,6 +158,26 @@ class PublicationServiceTest {
         verify(indexes, never()).deletePublished(anyLong(), anyLong(), anyLong());
     }
 
+    @Test
+    void repeatedConcurrentDisableReturnsRecordAfterDocumentLockSeesPointerCleared() {
+        PublicationRepository repository = mock(PublicationRepository.class);
+        PublicationIndexService indexes = mock(PublicationIndexService.class);
+        PublicationRecord existing = record(PublicationAction.DISABLE, 4L, null);
+        when(repository.findByRequest(1L, "concurrent-disable")).thenReturn(Optional.empty());
+        when(repository.loadCurrentPublishedTarget(1L, 2L, 3L))
+                .thenThrow(new com.xjjk.knowledge.common.error.BusinessException(
+                        com.xjjk.knowledge.common.api.ApiErrorCode.PUBLICATION_CONFLICT,
+                        "当前文档没有已发布版本"));
+        when(repository.findByRequestForUpdate(1L, "concurrent-disable"))
+                .thenReturn(Optional.of(existing));
+
+        PublicationRecord result = service(repository, indexes)
+                .disable(principal(), 1L, 2L, 3L, "concurrent-disable");
+
+        assertThat(result).isEqualTo(existing);
+        verify(repository, never()).disable(any(), anyLong(), any());
+    }
+
     private PublicationService service(PublicationRepository repository, PublicationIndexService indexes) {
         return new PublicationService(
                 new TenantAccessGuard(), repository, indexes, mock(AuditService.class));
