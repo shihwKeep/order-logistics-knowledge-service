@@ -26,6 +26,7 @@
         <jsoup.version>1.23.2</jsoup.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <apache-poi.version>5.5.1</apache-poi.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
     </properties>
 
     <dependencyManagement>
@@ -109,6 +110,11 @@
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>${apache-poi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
         <dependency>
