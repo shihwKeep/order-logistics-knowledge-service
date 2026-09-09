@@ -1,6 +1,7 @@
 package com.xjjk.knowledge;
 
 import com.xjjk.knowledge.audit.AuditMapper;
+import com.xjjk.knowledge.audit.AuditQueryMapper;
 import com.xjjk.knowledge.document.persistence.DocumentMapper;
 import com.xjjk.knowledge.document.service.DocumentManagementMapper;
 import com.xjjk.knowledge.document.task.IngestionArtifactMapper;
@@ -38,6 +39,9 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private AuditMapper auditMapper;
+
+    @MockitoBean
+    private AuditQueryMapper auditQueryMapper;
 
     @MockitoBean
     private KnowledgeBaseMapper knowledgeBaseMapper;

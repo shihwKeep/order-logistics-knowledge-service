@@ -12,6 +12,20 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface DocumentManagementMapper {
     @Select("""
+            SELECT id,unit_id,chunk_index,title_path,content,token_count,
+                   CAST(location_json AS CHAR) AS location_json,created_at
+              FROM kb_chunk
+             WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND version_id=#{versionId}
+             ORDER BY chunk_index LIMIT #{limit} OFFSET #{offset}
+            """)
+    List<DocumentChunkView> listChunks(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("offset") int offset,
+            @Param("limit") int limit);
+
+    @Select("""
             <script>
             SELECT u.id,u.tenant_id,u.document_id,u.version_id,u.unit_type,u.unit_index,
                    u.location_label,u.title_path,u.raw_text,u.effective_text,u.ocr_confidence,

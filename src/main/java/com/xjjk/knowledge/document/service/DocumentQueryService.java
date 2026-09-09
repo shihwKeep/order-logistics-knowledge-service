@@ -58,6 +58,15 @@ public class DocumentQueryService {
         return management.listUnits(tenantId, documentId, versionId, lowConfidence, safeOffset, safeLimit);
     }
 
+    public List<DocumentChunkView> chunks(
+            AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, long versionId,
+            int offset, int limit) {
+        requireVersion(principal, tenantId, knowledgeBaseId, documentId, versionId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        return management.listChunks(tenantId, documentId, versionId, safeOffset, safeLimit);
+    }
+
     public Optional<IngestionTask> latestTask(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, long versionId) {
         requireVersion(principal, tenantId, knowledgeBaseId, documentId, versionId);
