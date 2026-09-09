@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
@@ -53,6 +54,35 @@ class IngestionWorkerTest {
 
         verify(artifacts).replaceParsedArtifacts(any(), any(), any(), any());
         verify(tasks).complete(7L, "token");
+    }
+
+    @Test
+    void marksVersionFailedAndSchedulesRetryWhenRequiredPageOcrFails() {
+        IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
+        DocumentRepository documents = mock(DocumentRepository.class);
+        SourceObjectStore objects = mock(SourceObjectStore.class);
+        DocumentParserRegistry parsers = mock(DocumentParserRegistry.class);
+        DocumentParser parser = mock(DocumentParser.class);
+        IngestionArtifactRepository artifacts = mock(IngestionArtifactRepository.class);
+        IngestionProperties properties = new IngestionProperties();
+        IngestionTaskLease lease = new IngestionTaskLease(8L, 1L, 2L, 3L, 4L, "PARSE", "lease-8");
+        when(tasks.claim(8L, properties.getWorkerId(), properties.getLeaseDuration())).thenReturn(Optional.of(lease));
+        when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(version()));
+        when(objects.get("source-key")).thenReturn(new ByteArrayInputStream(new byte[] {1}));
+        when(parsers.select("txt", "text/plain")).thenReturn(parser);
+        doThrow(new com.xjjk.knowledge.common.error.BusinessException(
+                com.xjjk.knowledge.common.api.ApiErrorCode.DOCUMENT_OCR_FAILED))
+                .when(parser).parse(any());
+        IngestionWorker worker = new IngestionWorker(
+                tasks, documents, objects, parsers, artifacts,
+                new StructuralChunker(new ChunkingProperties(), String::length), properties);
+
+        assertThat(worker.process(8L)).isFalse();
+
+        verify(artifacts).markFailed(1L, 3L, 4L, "PARSE", "DOCUMENT_OCR_FAILED");
+        verify(tasks).fail(
+                8L, "lease-8", "DOCUMENT_OCR_FAILED", "文档文字识别失败",
+                properties.getMaxRetries(), properties.getRetryBaseDelay());
     }
 
     private static DocumentVersion version() {

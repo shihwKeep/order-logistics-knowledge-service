@@ -62,6 +62,10 @@ public class IngestionArtifactRepository {
         mapper.markRechunked(version.tenantId(), version.documentId(), version.id(), chunks.size());
     }
 
+    public void markFailed(long tenantId, long documentId, long versionId, String stage, String errorCode) {
+        mapper.markFailed(tenantId, documentId, versionId, stage, errorCode);
+    }
+
     private void insertChunks(DocumentVersion version, List<DocumentChunk> chunks, Map<Integer, Long> unitIds) {
         for (DocumentChunk chunk : chunks) {
             Long unitId = unitIds.get(chunk.sourceUnitIndex());

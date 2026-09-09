@@ -74,6 +74,8 @@ public class IngestionWorker {
         } catch (Exception exception) {
             String code = exception instanceof BusinessException business
                     ? business.errorCode().code() : "DOCUMENT_INGESTION_FAILED";
+            artifacts.markFailed(
+                    lease.tenantId(), lease.documentId(), lease.versionId(), lease.stage(), code);
             tasks.fail(
                     lease.taskId(), lease.leaseToken(), code, exception.getMessage(),
                     properties.getMaxRetries(), properties.getRetryBaseDelay());

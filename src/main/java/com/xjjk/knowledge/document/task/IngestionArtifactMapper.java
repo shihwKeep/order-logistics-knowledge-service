@@ -86,4 +86,15 @@ public interface IngestionArtifactMapper {
             @Param("documentId") long documentId,
             @Param("versionId") long versionId,
             @Param("chunkCount") int chunkCount);
+
+    @Update("""
+            UPDATE kb_document_version SET status='FAILED',failure_stage=#{stage},last_error_code=#{errorCode}
+             WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND id=#{versionId}
+            """)
+    int markFailed(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("stage") String stage,
+            @Param("errorCode") String errorCode);
 }
