@@ -1,0 +1,13 @@
+package com.xjjk.knowledge.document.task;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+
+public interface IngestionTaskRepository {
+    Optional<IngestionTaskLease> claim(long taskId, String workerId, Duration leaseDuration);
+    Optional<IngestionTask> find(long taskId);
+    List<Long> findDueTaskIds(int limit);
+    boolean complete(long taskId, String leaseToken);
+    boolean fail(long taskId, String leaseToken, String errorCode, String message, int maxRetries, Duration baseDelay);
+}
