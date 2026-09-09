@@ -27,6 +27,7 @@
         <commons-csv.version>1.14.1</commons-csv.version>
         <apache-poi.version>5.5.1</apache-poi.version>
         <pdfbox.version>3.0.8</pdfbox.version>
+        <milvus-sdk.version>3.0.5</milvus-sdk.version>
     </properties>
 
     <dependencyManagement>
@@ -119,6 +120,11 @@
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>${milvus-sdk.version}</version>
         </dependency>
 
         <dependency>

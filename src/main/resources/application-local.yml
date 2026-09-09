@@ -82,3 +82,14 @@ knowledge:
       connect-timeout: 2s
       read-timeout: 5s
       verification-limit: 10000
+    milvus:
+      enabled: ${KNOWLEDGE_MILVUS_ENABLED:true}
+      uri: ${KNOWLEDGE_MILVUS_URI:http://127.0.0.1:19530}
+      database-name: ${KNOWLEDGE_MILVUS_DATABASE:default}
+      token: ${KNOWLEDGE_MILVUS_TOKEN:}
+      draft-collection: knowledge_chunks_draft_v1
+      published-collection: knowledge_chunks_published_v1
+      dimension: 2560
+      connect-timeout: 5s
+      request-timeout: 10s
+      verification-limit: 10000
