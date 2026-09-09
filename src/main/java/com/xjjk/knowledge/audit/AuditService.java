@@ -14,7 +14,8 @@ import java.util.Set;
 public class AuditService {
 
     private static final Set<String> ALLOWED_DETAIL_KEYS = Set.of(
-            "knowledgeBaseName", "previousStatus", "newStatus");
+            "knowledgeBaseName", "previousStatus", "newStatus",
+            "documentTitle", "versionId");
 
     private final AuditMapper mapper;
     private final ObjectMapper objectMapper;
@@ -28,6 +29,17 @@ public class AuditService {
             long tenantId,
             AdminPrincipal actor,
             AuditAction action,
+            String resourceId,
+            String requestId,
+            Map<String, ?> details) {
+        success(tenantId, actor, action, "KNOWLEDGE_BASE", resourceId, requestId, details);
+    }
+
+    public void success(
+            long tenantId,
+            AdminPrincipal actor,
+            AuditAction action,
+            String resourceType,
             String resourceId,
             String requestId,
             Map<String, ?> details) {
@@ -46,7 +58,7 @@ public class AuditService {
                     actor.userId(),
                     actor.tenantId(),
                     action.name(),
-                    "KNOWLEDGE_BASE",
+                    resourceType,
                     resourceId,
                     requestId,
                     "SUCCESS",

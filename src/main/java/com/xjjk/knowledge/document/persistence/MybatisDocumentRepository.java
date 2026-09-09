@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public class MybatisDocumentRepository implements DocumentRepository {
@@ -61,6 +62,19 @@ public class MybatisDocumentRepository implements DocumentRepository {
                 tenantId, document.getId(), version.getId(), objectKey);
         mapper.updateDraftPointer(
                 tenantId, document.getId(), version.getId(), actorUserId);
+        mapper.insertInitialTask(
+                tenantId,
+                knowledgeBaseId,
+                document.getId(),
+                version.getId(),
+                "PARSE:" + tenantId + ":" + version.getId());
+        mapper.insertInitialOutbox(
+                UUID.randomUUID().toString(),
+                tenantId,
+                Long.toString(version.getId()),
+                "{\"tenantId\":" + tenantId
+                        + ",\"documentId\":" + document.getId()
+                        + ",\"versionId\":" + version.getId() + "}");
 
         return new CreatedDocument(
                 requireDocument(tenantId, document.getId()),

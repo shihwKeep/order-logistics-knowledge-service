@@ -1,6 +1,7 @@
 package com.xjjk.knowledge;
 
 import com.xjjk.knowledge.audit.AuditMapper;
+import com.xjjk.knowledge.document.persistence.DocumentMapper;
 import com.xjjk.knowledge.knowledgebase.persistence.KnowledgeBaseMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,9 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private KnowledgeBaseMapper knowledgeBaseMapper;
+
+    @MockitoBean
+    private DocumentMapper documentMapper;
 
     @MockitoBean
     private StringRedisTemplate redisTemplate;

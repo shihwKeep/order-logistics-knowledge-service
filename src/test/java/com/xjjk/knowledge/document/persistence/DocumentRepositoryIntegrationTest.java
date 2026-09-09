@@ -78,6 +78,14 @@ class DocumentRepositoryIntegrationTest {
                         + "/version/"
                         + created.version().id()
                         + "/source");
+        assertThat((Long) sqlSession.selectOne(
+                "com.xjjk.knowledge.document.persistence.DocumentMapper.countTasksForVersion",
+                java.util.Map.of("tenantId", 1L, "versionId", created.version().id())))
+                .isEqualTo(1L);
+        assertThat((Long) sqlSession.selectOne(
+                "com.xjjk.knowledge.document.persistence.DocumentMapper.countPendingOutboxForVersion",
+                java.util.Map.of("tenantId", 1L, "versionId", created.version().id())))
+                .isEqualTo(1L);
     }
 
     @Test

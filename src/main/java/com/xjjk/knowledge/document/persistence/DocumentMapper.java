@@ -63,6 +63,55 @@ public interface DocumentMapper {
             @Param("versionId") long versionId,
             @Param("actorUserId") long actorUserId);
 
+    @Insert("""
+            INSERT INTO kb_ingestion_task
+              (tenant_id, knowledge_base_id, document_id, version_id, task_key, stage, status)
+            VALUES
+              (#{tenantId}, #{knowledgeBaseId}, #{documentId}, #{versionId},
+               #{taskKey}, 'PARSE', 'PENDING')
+            """)
+    int insertInitialTask(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("taskKey") String taskKey);
+
+    @Insert("""
+            INSERT INTO kb_outbox_event
+              (event_id, tenant_id, aggregate_type, aggregate_id, event_type, payload_json)
+            VALUES
+              (#{eventId}, #{tenantId}, 'DOCUMENT_VERSION', #{aggregateId},
+               'DOCUMENT_INGESTION_REQUESTED', CAST(#{payloadJson} AS JSON))
+            """)
+    int insertInitialOutbox(
+            @Param("eventId") String eventId,
+            @Param("tenantId") long tenantId,
+            @Param("aggregateId") String aggregateId,
+            @Param("payloadJson") String payloadJson);
+
+    @Select("""
+            SELECT COUNT(*)
+              FROM kb_ingestion_task
+             WHERE tenant_id = #{tenantId}
+               AND version_id = #{versionId}
+            """)
+    long countTasksForVersion(
+            @Param("tenantId") long tenantId,
+            @Param("versionId") long versionId);
+
+    @Select("""
+            SELECT COUNT(*)
+              FROM kb_outbox_event
+             WHERE tenant_id = #{tenantId}
+               AND aggregate_type = 'DOCUMENT_VERSION'
+               AND aggregate_id = CAST(#{versionId} AS CHAR)
+               AND status = 'PENDING'
+            """)
+    long countPendingOutboxForVersion(
+            @Param("tenantId") long tenantId,
+            @Param("versionId") long versionId);
+
     @Select("""
             SELECT id, tenant_id, knowledge_base_id, title,
                    current_draft_version_id, current_published_version_id,
