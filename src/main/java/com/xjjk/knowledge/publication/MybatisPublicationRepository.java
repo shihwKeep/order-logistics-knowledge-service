@@ -32,6 +32,11 @@ public class MybatisPublicationRepository implements PublicationRepository {
     }
 
     @Override
+    public Optional<PublicationRecord> findByRequestForUpdate(long tenantId, String requestId) {
+        return Optional.ofNullable(mapper.findRecordForUpdate(tenantId, requestId)).map(this::toRecord);
+    }
+
+    @Override
     public PublicationTarget loadVersionTarget(long tenantId, long knowledgeBaseId, long documentId, long versionId) {
         // PublicationService 在外层事务中调用此方法，因此这里先锁文档再准备外部索引，
         // 与旧索引清理共用同一行锁，保证发布/回滚和清理不会交叉破坏线上版本。

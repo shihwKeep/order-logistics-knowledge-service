@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 
 import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
@@ -78,13 +79,17 @@ class IngestionWorkerTest {
         doThrow(new com.xjjk.knowledge.common.error.BusinessException(
                 com.xjjk.knowledge.common.api.ApiErrorCode.DOCUMENT_OCR_FAILED))
                 .when(parser).parse(any());
+        when(artifacts.markFailedIfOwned(any(), any(), any(), any())).thenReturn(true);
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, objects, parsers, artifacts,
                 new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
 
         assertThat(worker.process(8L)).isFalse();
 
-        verify(artifacts).markFailed(1L, 3L, 4L, "PARSE", "DOCUMENT_OCR_FAILED");
+        verify(artifacts).markFailedIfOwned(
+                any(), org.mockito.ArgumentMatchers.eq(lease),
+                org.mockito.ArgumentMatchers.eq("PARSE"),
+                org.mockito.ArgumentMatchers.eq("DOCUMENT_OCR_FAILED"));
         verify(tasks).fail(
                 8L, "lease-8", "DOCUMENT_OCR_FAILED", "文档文字识别失败",
                 properties.getMaxRetries(), properties.getRetryBaseDelay());
@@ -94,6 +99,7 @@ class IngestionWorkerTest {
     void indexesPreparedChunksAndCompletesIndexTask() {
         IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
         DocumentRepository documents = mock(DocumentRepository.class);
+        IngestionArtifactRepository artifacts = mock(IngestionArtifactRepository.class);
         DraftIndexingService indexing = mock(DraftIndexingService.class);
         IngestionProperties properties = new IngestionProperties();
         properties.setLeaseDuration(Duration.ofMillis(90));
@@ -101,6 +107,7 @@ class IngestionWorkerTest {
         when(tasks.claim(9L, properties.getWorkerId(), properties.getLeaseDuration())).thenReturn(Optional.of(lease));
         when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(version()));
         when(tasks.renew(9L, "lease-9", properties.getLeaseDuration())).thenReturn(true);
+        when(artifacts.prepareIndexAttempt(any(), org.mockito.ArgumentMatchers.eq(lease))).thenReturn(true);
         when(tasks.complete(9L, "lease-9")).thenReturn(true);
         doAnswer(invocation -> {
             Thread.sleep(160);
@@ -108,15 +115,40 @@ class IngestionWorkerTest {
         }).when(indexing).index(any(), any(), anyLong(), any());
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class),
-                mock(IngestionArtifactRepository.class),
+                artifacts,
                 new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
 
         assertThat(worker.process(9L)).isTrue();
 
         verify(indexing).index(any(), any(), org.mockito.ArgumentMatchers.eq(9L),
                 org.mockito.ArgumentMatchers.eq("lease-9"));
+        verify(artifacts).prepareIndexAttempt(any(), org.mockito.ArgumentMatchers.eq(lease));
         verify(tasks, atLeastOnce()).renew(9L, "lease-9", properties.getLeaseDuration());
         verify(tasks).complete(9L, "lease-9");
+    }
+
+    @Test
+    void staleIndexWorkerCannotOverwriteNewerVersionStateWithFailed() {
+        IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
+        DocumentRepository documents = mock(DocumentRepository.class);
+        IngestionArtifactRepository artifacts = mock(IngestionArtifactRepository.class);
+        DraftIndexingService indexing = mock(DraftIndexingService.class);
+        IngestionProperties properties = new IngestionProperties();
+        IngestionTaskLease lease = new IngestionTaskLease(10L, 1L, 2L, 3L, 4L, "INDEX", "lease-10");
+        when(tasks.claim(10L, properties.getWorkerId(), properties.getLeaseDuration())).thenReturn(Optional.of(lease));
+        when(tasks.renew(10L, "lease-10", properties.getLeaseDuration())).thenReturn(true);
+        when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(version()));
+        when(artifacts.prepareIndexAttempt(any(), org.mockito.ArgumentMatchers.eq(lease))).thenReturn(true);
+        doThrow(new com.xjjk.knowledge.retrieval.indexing.IngestionLeaseLostException())
+                .when(indexing).index(any(), any(), anyLong(), any());
+        IngestionWorker worker = new IngestionWorker(
+                tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class), artifacts,
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties);
+
+        assertThat(worker.process(10L)).isFalse();
+
+        verify(artifacts, never()).markFailedIfOwned(any(), any(), any(), any());
+        verify(tasks).complete(10L, "lease-10");
     }
 
     private static DocumentVersion version() {

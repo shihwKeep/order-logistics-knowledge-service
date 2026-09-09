@@ -57,6 +57,16 @@ public interface PublicationMapper {
             """)
     PublicationRecordEntity findRecord(@Param("tenantId") long tenantId, @Param("requestId") String requestId);
 
+    @Select("""
+            SELECT id,tenant_id,knowledge_base_id,document_id,from_version_id,to_version_id,action,
+                   actor_user_id,request_id,chunk_count,manifest_sha256,created_at
+              FROM kb_publish_record
+             WHERE tenant_id=#{tenantId} AND request_id=#{requestId}
+             FOR UPDATE
+            """)
+    PublicationRecordEntity findRecordForUpdate(
+            @Param("tenantId") long tenantId, @Param("requestId") String requestId);
+
     @Update("""
             UPDATE kb_document SET current_published_version_id=#{versionId},updated_by=#{actorUserId},
                    row_version=row_version+1

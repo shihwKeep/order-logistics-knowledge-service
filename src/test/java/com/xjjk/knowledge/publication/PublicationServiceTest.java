@@ -77,6 +77,25 @@ class PublicationServiceTest {
     }
 
     @Test
+    void returnsConcurrentResultSeenByLockingReadBeforeReindexing() {
+        PublicationRepository repository = mock(PublicationRepository.class);
+        PublicationIndexService indexes = mock(PublicationIndexService.class);
+        PublicationTarget target = target(DocumentStatus.PUBLISHED, 4L);
+        PublicationRecord existing = record(PublicationAction.PUBLISH, null, 4L);
+        when(repository.findByRequest(1L, "concurrent-request")).thenReturn(Optional.empty());
+        when(repository.loadVersionTarget(1L, 2L, 3L, 4L)).thenReturn(target);
+        when(repository.findByRequestForUpdate(1L, "concurrent-request"))
+                .thenReturn(Optional.of(existing));
+
+        PublicationRecord result = service(repository, indexes)
+                .publish(principal(), 1L, 2L, 3L, 4L, "concurrent-request");
+
+        assertThat(result).isEqualTo(existing);
+        verify(indexes, never()).preparePublished(any());
+        verify(repository, never()).activate(any(), any(), anyLong(), any());
+    }
+
+    @Test
     void rejectsReusingIdempotencyKeyForAnotherActionOrTarget() {
         PublicationRepository repository = mock(PublicationRepository.class);
         PublicationIndexService indexes = mock(PublicationIndexService.class);

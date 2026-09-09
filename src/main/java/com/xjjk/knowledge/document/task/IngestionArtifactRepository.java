@@ -65,8 +65,19 @@ public class IngestionArtifactRepository {
         enqueueIndex(version);
     }
 
-    public void markFailed(long tenantId, long documentId, long versionId, String stage, String errorCode) {
-        mapper.markFailed(tenantId, documentId, versionId, stage, errorCode);
+    /** 自动重试 INDEX 时，仅允许当前租约把同一人工校正修订从 FAILED 恢复到 INDEXING。 */
+    public boolean prepareIndexAttempt(DocumentVersion version, IngestionTaskLease lease) {
+        return mapper.prepareIndexAttempt(
+                version.tenantId(), version.documentId(), version.id(), version.correctionRevision(),
+                lease.taskId(), lease.leaseToken()) == 1;
+    }
+
+    /** 失败状态同样受修订号和任务租约保护，陈旧 Worker 不得覆盖新校正或 READY。 */
+    public boolean markFailedIfOwned(
+            DocumentVersion version, IngestionTaskLease lease, String stage, String errorCode) {
+        return mapper.markFailedIfOwned(
+                version.tenantId(), version.documentId(), version.id(), version.correctionRevision(),
+                lease.taskId(), lease.leaseToken(), stage, errorCode) == 1;
     }
 
     private void insertChunks(DocumentVersion version, List<DocumentChunk> chunks, Map<Integer, Long> unitIds) {

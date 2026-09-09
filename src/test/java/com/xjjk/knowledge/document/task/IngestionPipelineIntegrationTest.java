@@ -50,7 +50,7 @@ class IngestionPipelineIntegrationTest {
             .withDatabaseName("order_logistics_knowledge").withUsername("knowledge").withPassword("knowledge");
 
     @Test
-    void textUploadRunsParseThenIndexAndReachesReady() {
+    void textUploadRunsParseThenRetriesIndexAndReachesReady() throws Exception {
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()).load().migrate();
         PooledDataSource dataSource = new PooledDataSource(
                 "com.mysql.cj.jdbc.Driver", MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
@@ -105,6 +105,15 @@ class IngestionPipelineIntegrationTest {
             assertThat(indexTask.stage()).isEqualTo("INDEX");
             assertThat(indexTask.status()).isEqualTo("PENDING");
 
+            vector.failNextReplace = true;
+            assertThat(worker.process(indexTask.id())).isFalse();
+            assertThat(documents.findVersion(1L, created.document().id(), created.version().id()).orElseThrow().status())
+                    .isEqualTo(DocumentStatus.FAILED);
+            try (java.sql.Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE kb_ingestion_task SET next_run_at=CURRENT_TIMESTAMP(3) "
+                        + "WHERE id=" + indexTask.id());
+            }
+
             assertThat(worker.process(indexTask.id())).isTrue();
             var ready = documents.findVersion(1L, created.document().id(), created.version().id()).orElseThrow();
             assertThat(ready.status()).isEqualTo(DocumentStatus.READY);
@@ -115,8 +124,13 @@ class IngestionPipelineIntegrationTest {
 
     private static final class MemoryIndex implements KeywordIndex, VectorIndex {
         private final Map<String, String> fingerprints = new LinkedHashMap<>();
+        private boolean failNextReplace;
         @Override public void ensureReady() {}
         @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks) {
+            if (failNextReplace) {
+                failNextReplace = false;
+                throw new IllegalStateException("simulated index failure");
+            }
             fingerprints.clear();
             chunks.forEach(chunk -> fingerprints.put(chunk.chunkId(), chunk.contentSha256()));
         }

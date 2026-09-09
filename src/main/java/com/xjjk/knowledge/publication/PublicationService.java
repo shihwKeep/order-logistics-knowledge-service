@@ -10,6 +10,7 @@ import com.xjjk.knowledge.retrieval.indexing.PublicationIndexService;
 import com.xjjk.knowledge.tenant.TenantAccessGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +32,7 @@ public class PublicationService {
         this.audit = audit;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PublicationRecord publish(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, long versionId,
             String requestId) {
@@ -39,7 +40,7 @@ public class PublicationService {
                 requestId, PublicationAction.PUBLISH);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PublicationRecord rollback(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, long versionId,
             String requestId) {
@@ -47,7 +48,7 @@ public class PublicationService {
                 requestId, PublicationAction.ROLLBACK);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PublicationRecord disable(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, String requestId) {
         require(principal, tenantId, requestId);
@@ -74,7 +75,7 @@ public class PublicationService {
         }
         PublicationTarget target = repository.loadVersionTarget(tenantId, knowledgeBaseId, documentId, versionId);
         // 首次查询与取得文档行锁之间可能已有并发请求完成；锁后再读一次即可返回同一结果。
-        duplicate = repository.findByRequest(tenantId, requestId);
+        duplicate = repository.findByRequestForUpdate(tenantId, requestId);
         if (duplicate.isPresent()) {
             return requireMatchingDuplicate(
                     duplicate.get(), action, knowledgeBaseId, documentId, versionId);

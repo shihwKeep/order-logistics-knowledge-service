@@ -54,14 +54,20 @@ public class IngestionWorker {
     }
 
     private boolean processClaimed(IngestionTaskLease lease) {
+        DocumentVersion version = null;
         try {
-            DocumentVersion version = documents.findVersion(
+            version = documents.findVersion(
                             lease.tenantId(), lease.documentId(), lease.versionId())
                     .orElseThrow(() -> new IllegalStateException("任务对应的文档版本不存在"));
             if ("INDEX".equals(lease.stage())) {
                 try (IngestionLeaseHeartbeat heartbeat = new IngestionLeaseHeartbeat(
                         tasks, lease, properties.getLeaseDuration())) {
                     if (!heartbeat.start()) {
+                        return false;
+                    }
+                    if (!artifacts.prepareIndexAttempt(version, lease)) {
+                        // 当前修订已被替换，或租约已转移；旧任务不再重试。
+                        tasks.complete(lease.taskId(), lease.leaseToken());
                         return false;
                     }
                     indexing.index(
@@ -90,15 +96,21 @@ public class IngestionWorker {
             return tasks.complete(lease.taskId(), lease.leaseToken());
         } catch (IngestionLeaseLostException exception) {
             // 租约已转移给其他 Worker，旧 Worker 不能覆盖版本失败状态或新任务结果。
+            tasks.complete(lease.taskId(), lease.leaseToken());
             return false;
         } catch (Exception exception) {
             String code = exception instanceof BusinessException business
                     ? business.errorCode().code() : "DOCUMENT_INGESTION_FAILED";
-            artifacts.markFailed(
-                    lease.tenantId(), lease.documentId(), lease.versionId(), lease.stage(), code);
-            tasks.fail(
-                    lease.taskId(), lease.leaseToken(), code, exception.getMessage(),
-                    properties.getMaxRetries(), properties.getRetryBaseDelay());
+            boolean canRetry = version == null
+                    || artifacts.markFailedIfOwned(version, lease, lease.stage(), code);
+            if (canRetry) {
+                tasks.fail(
+                        lease.taskId(), lease.leaseToken(), code, exception.getMessage(),
+                        properties.getMaxRetries(), properties.getRetryBaseDelay());
+            } else {
+                // 同一版本已进入更新修订或终态，当前任务已过期，直接结束其租约。
+                tasks.complete(lease.taskId(), lease.leaseToken());
+            }
             return false;
         }
     }

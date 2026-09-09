@@ -36,6 +36,9 @@ public class MybatisChunkIndexRepository implements ChunkIndexRepository {
                 metadata.model(), metadata.dimension(), metadata.instructionVersion(),
                 metadata.manifestSha256(), taskId, leaseToken);
         if (updated != 1) {
+            if (taskId != null) {
+                throw new IngestionLeaseLostException();
+            }
             throw new IllegalStateException(
                     "文档版本状态、校正修订号或 Chunk 数量已发生变化，拒绝标记 READY");
         }
