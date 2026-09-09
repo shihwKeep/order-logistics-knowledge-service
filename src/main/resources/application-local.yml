@@ -73,3 +73,12 @@ knowledge:
       connect-timeout: 2s
       read-timeout: 45s
       instruction-version: qwen3-customer-service-v1
+    elasticsearch:
+      base-url: ${KNOWLEDGE_ELASTICSEARCH_BASE_URL:http://127.0.0.1:9200}
+      username: ${KNOWLEDGE_ELASTICSEARCH_USERNAME:}
+      password: ${KNOWLEDGE_ELASTICSEARCH_PASSWORD:}
+      draft-index: knowledge_chunks_draft_v1
+      published-index: knowledge_chunks_published_v1
+      connect-timeout: 2s
+      read-timeout: 5s
+      verification-limit: 10000
