@@ -33,6 +33,7 @@ public class HybridRetrievalService {
     private final RerankerProperties rerankerProperties;
     private final RetrievalProperties properties;
     private final PublishedVersionValidator publishedValidator;
+    private final DraftVersionValidator draftValidator;
     private final SearchLogRecorder searchLogs;
 
     public HybridRetrievalService(
@@ -44,6 +45,7 @@ public class HybridRetrievalService {
             RerankerProperties rerankerProperties,
             RetrievalProperties properties,
             PublishedVersionValidator publishedValidator,
+            DraftVersionValidator draftValidator,
             SearchLogRecorder searchLogs) {
         this.embeddings = embeddings;
         this.keywordIndex = keywordIndex;
@@ -53,11 +55,26 @@ public class HybridRetrievalService {
         this.rerankerProperties = rerankerProperties;
         this.properties = properties;
         this.publishedValidator = publishedValidator;
+        this.draftValidator = draftValidator;
         this.searchLogs = searchLogs;
     }
 
     public RetrievalResult retrieve(
             long tenantId, long userId, String requestId, String question, List<Long> knowledgeBaseIds) {
+        return retrieveLayer(
+                tenantId, userId, requestId, question, knowledgeBaseIds, IndexLayer.PUBLISHED);
+    }
+
+    public RetrievalResult retrieveAdmin(
+            long tenantId, long userId, String requestId, String question,
+            List<Long> knowledgeBaseIds, IndexLayer layer) {
+        if (layer == null) throw new IllegalArgumentException("检索层不能为空");
+        return retrieveLayer(tenantId, userId, requestId, question, knowledgeBaseIds, layer);
+    }
+
+    private RetrievalResult retrieveLayer(
+            long tenantId, long userId, String requestId, String question,
+            List<Long> knowledgeBaseIds, IndexLayer layer) {
         if (tenantId <= 0 || userId <= 0 || requestId == null || requestId.isBlank()
                 || question == null || question.isBlank()) {
             throw new IllegalArgumentException("检索身份、请求号和问题不能为空");
@@ -71,7 +88,7 @@ public class HybridRetrievalService {
         try {
             List<Float> queryVector = embeddings.embedQuery(question);
             vectorCandidates = vectorIndex.search(
-                    IndexLayer.PUBLISHED, tenantId, knowledgeBaseIds, queryVector, properties.getRecallTopK());
+                    layer, tenantId, knowledgeBaseIds, queryVector, properties.getRecallTopK());
         } catch (RuntimeException exception) {
             vectorAvailable = false;
             log.warn("knowledge_vector_recall_unavailable requestId={}, exceptionType={}",
@@ -79,7 +96,7 @@ public class HybridRetrievalService {
         }
         try {
             keywordCandidates = keywordIndex.search(
-                    IndexLayer.PUBLISHED, tenantId, knowledgeBaseIds, question, properties.getRecallTopK());
+                    layer, tenantId, knowledgeBaseIds, question, properties.getRecallTopK());
         } catch (RuntimeException exception) {
             keywordAvailable = false;
             log.warn("knowledge_keyword_recall_unavailable requestId={}, exceptionType={}",
@@ -87,7 +104,7 @@ public class HybridRetrievalService {
         }
 
         if (!vectorAvailable && !keywordAvailable) {
-            publishedValidator.validate(tenantId, List.of());
+            validateLayer(layer, tenantId, List.of());
             recordSafely(new SearchLogEntry(
                     tenantId, userId, requestId, properties.getVersion(), DegradationMode.ALL_RECALL_UNAVAILABLE,
                     ApiErrorCode.KNOWLEDGE_SERVICE_UNAVAILABLE.code(), false, 0, 0, 0, 0, elapsed(startedAt)));
@@ -121,7 +138,7 @@ public class HybridRetrievalService {
         }
 
         // 终审必须在精排/降级之后、返回调用方之前执行。
-        List<RankedEvidence> evidences = publishedValidator.validate(tenantId, selected).stream()
+        List<RankedEvidence> evidences = validateLayer(layer, tenantId, selected).stream()
                 .limit(properties.getFinalTopK())
                 .toList();
         boolean answerable = !evidences.isEmpty();
@@ -135,6 +152,13 @@ public class HybridRetrievalService {
                 tenantId, userId, requestId, properties.getVersion(), degradation, resultCode, answerable,
                 vectorCandidates.size(), keywordCandidates.size(), fused.size(), evidences.size(), elapsed(startedAt)));
         return result;
+    }
+
+    private List<RankedEvidence> validateLayer(
+            IndexLayer layer, long tenantId, List<RankedEvidence> candidates) {
+        return layer == IndexLayer.PUBLISHED
+                ? publishedValidator.validate(tenantId, candidates)
+                : draftValidator.validate(tenantId, candidates);
     }
 
     private void recordSafely(SearchLogEntry entry) {

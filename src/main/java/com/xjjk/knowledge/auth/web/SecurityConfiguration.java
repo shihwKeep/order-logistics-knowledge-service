@@ -37,11 +37,15 @@ public class SecurityConfiguration {
                 .requestCache(requestCache -> requestCache.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfRepository)
+                        // 内部检索使用 HMAC、时间戳和一次性 nonce 鉴权，不依赖浏览器 CSRF Token。
+                        .ignoringRequestMatchers("/api/v1/internal/**"))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/internal/knowledge/retrieve").permitAll()
                         .requestMatchers("/internal/**").denyAll()
                         .requestMatchers("/api/v1/admin/**").authenticated()
                         .anyRequest().permitAll())

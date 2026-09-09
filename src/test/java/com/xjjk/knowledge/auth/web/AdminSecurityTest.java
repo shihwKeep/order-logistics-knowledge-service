@@ -104,6 +104,13 @@ class AdminSecurityTest {
     }
 
     @Test
+    void signedInternalRouteIsNotBlockedByBrowserSessionOrCsrfRules() throws Exception {
+        mvc.perform(post("/api/v1/internal/security-probe"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value("internal-ok"));
+    }
+
+    @Test
     void staleRoleThatWasDisabledRejectsRequestAndDeletesSession() throws Exception {
         when(sessionRepository.find("valid")).thenReturn(Optional.of(session));
         when(roleRefresher.refreshIfRequired("valid", session, false))
@@ -135,6 +142,7 @@ class AdminSecurityTest {
                                 .isEqualTo(ApiErrorCode.KNOWLEDGE_ACCESS_DENIED));
         verify(repository).delete("valid");
     }
+
 }
 
 @RestController
@@ -148,5 +156,10 @@ class AdminSecurityProbeController {
     @PostMapping("/api/v1/admin/security-probe")
     ApiResponse<String> postProbe() {
         return ApiResponse.success("ok");
+    }
+
+    @PostMapping("/api/v1/internal/security-probe")
+    ApiResponse<String> internalProbe() {
+        return ApiResponse.success("internal-ok");
     }
 }

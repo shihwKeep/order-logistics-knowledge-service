@@ -128,6 +128,23 @@ class HybridRetrievalServiceTest {
                         exception -> assertThat(exception.errorCode().code()).isEqualTo("KNOWLEDGE_SERVICE_UNAVAILABLE"));
     }
 
+    @Test
+    void adminDraftInspectionUsesDraftIndexesAndDraftPointerValidation() {
+        Fixture fixture = new Fixture();
+        fixture.keyword.result = List.of(candidate("draft", RecallSource.KEYWORD));
+        fixture.vector.result = List.of(candidate("draft", RecallSource.VECTOR));
+        fixture.reranker = (query, values) -> values.stream()
+                .map(value -> value.withScore(0.9D)).toList();
+
+        var result = fixture.service().retrieveAdmin(
+                1L, 10567L, "request-8", "问题", List.of(), IndexLayer.DRAFT);
+
+        assertThat(result.answerable()).isTrue();
+        assertThat(fixture.keyword.lastLayer).isEqualTo(IndexLayer.DRAFT);
+        assertThat(fixture.vector.lastLayer).isEqualTo(IndexLayer.DRAFT);
+        verify(fixture.draftValidator).validate(eq(1L), anyList());
+    }
+
     private static RecallCandidate candidate(String id, RecallSource source) {
         return new RecallCandidate(new IndexChunk(
                 id, 1L, 2L, 3L, 4L, 0, "退款规则", "售后", "正文", "hash", "{}"),
@@ -138,12 +155,14 @@ class HybridRetrievalServiceTest {
         private final FakeKeywordIndex keyword = new FakeKeywordIndex();
         private final FakeVectorIndex vector = new FakeVectorIndex();
         private final PublishedVersionValidator validator = mock(PublishedVersionValidator.class);
+        private final DraftVersionValidator draftValidator = mock(DraftVersionValidator.class);
         private final SearchLogRecorder searchLogs = mock(SearchLogRecorder.class);
         private boolean embeddingFailure;
         private Reranker reranker = (query, values) -> values;
 
         private Fixture() {
             when(validator.validate(eq(1L), anyList())).thenAnswer(invocation -> invocation.getArgument(1));
+            when(draftValidator.validate(eq(1L), anyList())).thenAnswer(invocation -> invocation.getArgument(1));
         }
 
         private HybridRetrievalService service() {
@@ -158,7 +177,7 @@ class HybridRetrievalServiceTest {
             RerankerProperties rerankerProperties = new RerankerProperties();
             return new HybridRetrievalService(
                     embeddings, keyword, vector, new RrfFusion(), reranker, rerankerProperties,
-                    properties, validator, searchLogs);
+                    properties, validator, draftValidator, searchLogs);
         }
     }
 
@@ -166,9 +185,11 @@ class HybridRetrievalServiceTest {
         private List<RecallCandidate> result = List.of();
         private RuntimeException failure;
         private int lastTopK;
+        private IndexLayer lastLayer;
         @Override public void ensureReady() {}
         @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks) {}
         @Override public List<RecallCandidate> search(IndexLayer layer, long tenantId, List<Long> ids, String query, int topK) {
+            lastLayer = layer;
             lastTopK = topK;
             if (failure != null) throw failure;
             return result;
@@ -181,9 +202,11 @@ class HybridRetrievalServiceTest {
         private List<RecallCandidate> result = List.of();
         private RuntimeException failure;
         private int lastTopK;
+        private IndexLayer lastLayer;
         @Override public void ensureReady() {}
         @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks, List<List<Float>> vectors) {}
         @Override public List<RecallCandidate> search(IndexLayer layer, long tenantId, List<Long> ids, List<Float> vector, int topK) {
+            lastLayer = layer;
             lastTopK = topK;
             if (failure != null) throw failure;
             return result;

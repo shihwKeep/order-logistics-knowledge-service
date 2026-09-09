@@ -10,6 +10,7 @@ import com.xjjk.knowledge.retrieval.indexing.ChunkIndexMapper;
 import com.xjjk.knowledge.retrieval.service.PublishedVersionMapper;
 import com.xjjk.knowledge.retrieval.service.SearchLogMapper;
 import com.xjjk.knowledge.publication.PublicationMapper;
+import com.xjjk.knowledge.retrieval.service.DraftVersionMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -64,6 +65,9 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private PublicationMapper publicationMapper;
+
+    @MockitoBean
+    private DraftVersionMapper draftVersionMapper;
 
     @MockitoBean
     private StringRedisTemplate redisTemplate;
