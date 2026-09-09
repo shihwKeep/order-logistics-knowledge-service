@@ -32,7 +32,8 @@ class DocumentCorrectionServiceTest {
                 new KnowledgeDocument(3L, 1L, 2L, "退款规则", 4L, null, 1L, 1L, 0, now, now)));
         when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(new DocumentVersion(
                 4L, 1L, 2L, 3L, 1, DocumentStatus.CHUNKING, "refund.pdf", "pdf", "application/pdf",
-                10L, "sha", "key", null, "pdf-v1", "structural-v1", true, 0, 1, 0,
+                10L, "sha", "key", null, "pdf-v1", "structural-v1",
+                null, null, null, null, null, true, 0, 1, 0,
                 null, null, null, 10567L, now, now)));
         DocumentUnit corrected = new DocumentUnit(
                 9L, 1L, 3L, 4L, "PAGE", 1, "第 1 页", "退款",

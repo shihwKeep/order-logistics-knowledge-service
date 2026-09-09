@@ -18,6 +18,11 @@ public class DocumentVersionEntity {
     private String parsedObjectKey;
     private String parserVersion;
     private String chunkStrategyVersion;
+    private String embeddingModel;
+    private Integer embeddingDimension;
+    private String embeddingInstructionVersion;
+    private String indexManifestSha256;
+    private LocalDateTime indexedAt;
     private Boolean ocrRequired;
     private Integer correctionRevision;
     private Integer unitCount;
@@ -59,6 +64,16 @@ public class DocumentVersionEntity {
     public void setParserVersion(String parserVersion) { this.parserVersion = parserVersion; }
     public String getChunkStrategyVersion() { return chunkStrategyVersion; }
     public void setChunkStrategyVersion(String chunkStrategyVersion) { this.chunkStrategyVersion = chunkStrategyVersion; }
+    public String getEmbeddingModel() { return embeddingModel; }
+    public void setEmbeddingModel(String embeddingModel) { this.embeddingModel = embeddingModel; }
+    public Integer getEmbeddingDimension() { return embeddingDimension; }
+    public void setEmbeddingDimension(Integer embeddingDimension) { this.embeddingDimension = embeddingDimension; }
+    public String getEmbeddingInstructionVersion() { return embeddingInstructionVersion; }
+    public void setEmbeddingInstructionVersion(String embeddingInstructionVersion) { this.embeddingInstructionVersion = embeddingInstructionVersion; }
+    public String getIndexManifestSha256() { return indexManifestSha256; }
+    public void setIndexManifestSha256(String indexManifestSha256) { this.indexManifestSha256 = indexManifestSha256; }
+    public LocalDateTime getIndexedAt() { return indexedAt; }
+    public void setIndexedAt(LocalDateTime indexedAt) { this.indexedAt = indexedAt; }
     public Boolean getOcrRequired() { return ocrRequired; }
     public void setOcrRequired(Boolean ocrRequired) { this.ocrRequired = ocrRequired; }
     public Integer getCorrectionRevision() { return correctionRevision; }

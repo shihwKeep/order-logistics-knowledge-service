@@ -90,7 +90,7 @@ class IngestionWorkerTest {
         return new DocumentVersion(
                 4L, 1L, 2L, 3L, 1, DocumentStatus.UPLOADED,
                 "refund.txt", "txt", "text/plain", 12L, "sha", "source-key",
-                null, null, null, false, 0, 0, 0,
+                null, null, null, null, null, null, null, null, false, 0, 0, 0,
                 null, null, null, 10567L, now, now);
     }
 }

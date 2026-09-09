@@ -126,7 +126,7 @@ class DocumentUploadServiceTest {
                 "refund.pdf", "pdf", "application/pdf", 16L,
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "tenant/1/knowledge-base/10/document/13/version/21/source",
-                null, null, null, false, 0, 0, 0,
+                null, null, null, null, null, null, null, null, false, 0, 0, 0,
                 null, null, null, 10567L, now, now);
         return new CreatedDocument(document, version);
     }
