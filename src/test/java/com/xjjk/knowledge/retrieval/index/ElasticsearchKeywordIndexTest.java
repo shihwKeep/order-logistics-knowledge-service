@@ -71,7 +71,7 @@ class ElasticsearchKeywordIndexTest {
                             .contains("ik_max_word")
                             .contains("ik_smart"));
             assertThat(requests).anySatisfy(value -> assertThat(value)
-                    .startsWith("POST /_bulk")
+                    .startsWith("POST /_bulk?refresh=wait_for")
                     .contains("\"_id\":\"1-3-4-0\"")
                     .contains("knowledge_chunks_draft_v1"));
             assertThat(requests).anySatisfy(value -> assertThat(value)

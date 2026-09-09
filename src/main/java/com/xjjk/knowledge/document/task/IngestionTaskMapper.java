@@ -54,6 +54,16 @@ public interface IngestionTaskMapper {
 
     @Update("""
             UPDATE kb_ingestion_task
+               SET locked_until=#{lockedUntil},updated_at=CURRENT_TIMESTAMP(3)
+             WHERE id=#{taskId} AND status='PROCESSING' AND lease_token=#{leaseToken}
+            """)
+    int renew(
+            @Param("taskId") long taskId,
+            @Param("leaseToken") String leaseToken,
+            @Param("lockedUntil") LocalDateTime lockedUntil);
+
+    @Update("""
+            UPDATE kb_ingestion_task
                SET status='DONE', lease_token=NULL, locked_by=NULL, locked_until=NULL,
                    last_error_code=NULL, last_error_message=NULL, updated_at=CURRENT_TIMESTAMP(3)
              WHERE id=#{taskId} AND status='PROCESSING' AND lease_token=#{leaseToken}

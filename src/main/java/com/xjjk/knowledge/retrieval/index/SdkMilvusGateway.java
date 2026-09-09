@@ -12,6 +12,8 @@ import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.request.HasCollectionReq;
 import io.milvus.v2.service.collection.request.LoadCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import io.milvus.v2.service.index.request.DescribeIndexReq;
+import io.milvus.v2.service.index.response.DescribeIndexResp;
 import io.milvus.v2.service.vector.request.DeleteReq;
 import io.milvus.v2.service.vector.request.QueryReq;
 import io.milvus.v2.service.vector.request.SearchReq;
@@ -66,8 +68,17 @@ public class SdkMilvusGateway implements MilvusGateway {
             if (schema == null || schema.getField(EMBEDDING) == null) {
                 throw new IllegalStateException("Milvus Collection 缺少向量字段");
             }
+            DescribeIndexResp indexResponse = client.describeIndex(DescribeIndexReq.builder()
+                    .databaseName(properties.getDatabaseName())
+                    .collectionName(collection)
+                    .fieldName(EMBEDDING)
+                    .build());
+            DescribeIndexResp.IndexDesc vectorIndex = indexResponse.getIndexDescByFieldName(EMBEDDING);
+            if (vectorIndex == null || vectorIndex.getMetricType() == null) {
+                throw new IllegalStateException("Milvus Collection 缺少向量索引或距离度量");
+            }
             return new MilvusCollectionSpec(collection, schema.getField(EMBEDDING).getDimension(),
-                    "COSINE", response.getPrimaryFieldName());
+                    vectorIndex.getMetricType().name(), response.getPrimaryFieldName());
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (RuntimeException exception) {

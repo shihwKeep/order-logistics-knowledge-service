@@ -32,15 +32,25 @@ public interface ChunkIndexMapper {
                    index_manifest_sha256=#{manifestSha256},indexed_at=CURRENT_TIMESTAMP(3),
                    failure_stage=NULL,last_error_code=NULL,last_error_message=NULL
              WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND id=#{versionId}
-               AND chunk_count=#{chunkCount}
+               AND status='INDEXING' AND chunk_count=#{chunkCount}
+               AND correction_revision=#{correctionRevision}
+               AND (#{taskId} IS NULL OR EXISTS (
+                    SELECT 1 FROM kb_ingestion_task t
+                     WHERE t.id=#{taskId} AND t.status='PROCESSING'
+                       AND t.lease_token=#{leaseToken}
+                       AND t.locked_until>=CURRENT_TIMESTAMP(3)
+               ))
             """)
     int markReady(
             @Param("tenantId") long tenantId,
             @Param("documentId") long documentId,
             @Param("versionId") long versionId,
             @Param("chunkCount") int chunkCount,
+            @Param("correctionRevision") int correctionRevision,
             @Param("model") String model,
             @Param("dimension") int dimension,
             @Param("instructionVersion") String instructionVersion,
-            @Param("manifestSha256") String manifestSha256);
+            @Param("manifestSha256") String manifestSha256,
+            @Param("taskId") Long taskId,
+            @Param("leaseToken") String leaseToken);
 }

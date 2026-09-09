@@ -86,10 +86,10 @@ POST /api/v1/admin/tenants/{tenantId}/knowledge/retrieve?layer=PUBLISHED
 内部接口为 `POST /api/v1/internal/knowledge/retrieve`。调用方发送租户、当前登录用户、毫秒时间戳、随机 nonce、签名和可选请求号。签名原文严格为：
 
 ```text
-POST\n/api/v1/internal/knowledge/retrieve\n{tenantId}\n{userId}\n{timestamp}\n{nonce}\n{sha256(trim(question))}
+POST\n/api/v1/internal/knowledge/retrieve\n{tenantId}\n{userId}\n{timestamp}\n{nonce}\n{sha256(trim(question))}\n{sortedDistinctKnowledgeBaseIdsCsv}
 ```
 
-对以上 UTF-8 文本使用共享密钥计算 HMAC-SHA256，并发送小写十六进制结果。服务端先验证五分钟时间窗和签名，再用 Redis `SET NX` 保存 nonce 十分钟；Redis 不可用时入口关闭，防止降级后出现重放风险。接口只查询当前发布层，用户无法通过请求切换到草稿层。
+`sortedDistinctKnowledgeBaseIdsCsv` 是将 `knowledgeBaseIds` 去重、升序排序后用英文逗号连接的结果；未限定知识库时为空字符串。对以上 UTF-8 文本使用共享密钥计算 HMAC-SHA256，并发送小写十六进制结果。服务端先验证五分钟时间窗和签名，再用 Redis `SET NX` 保存 nonce 十分钟；Redis 不可用时入口关闭，防止降级后出现重放风险。接口只查询当前发布层，用户无法通过请求切换到草稿层。
 
 ## 6. 故障矩阵
 

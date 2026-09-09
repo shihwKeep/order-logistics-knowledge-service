@@ -89,6 +89,31 @@ public interface PublicationMapper {
     int insertCleanup(@Param("tenantId") long tenantId, @Param("publishRecordId") long publishRecordId,
                       @Param("documentId") long documentId, @Param("versionId") long versionId);
 
+    @Update("""
+            UPDATE kb_published_index_cleanup
+               SET status='CANCELED',last_error_code=NULL
+             WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND version_id=#{versionId}
+               AND status IN ('PENDING','RETRY')
+            """)
+    int cancelCleanupForVersion(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId);
+
+    /**
+     * 与发布/回滚使用相同的文档行锁。清理事务持锁期间，发布指针不能切换到待删除版本。
+     * 返回 null 既可能表示文档未发布，也可能表示文档不存在；两种情况都允许清理派生索引。
+     */
+    @Select("""
+            SELECT current_published_version_id
+              FROM kb_document
+             WHERE tenant_id=#{tenantId} AND id=#{documentId}
+             FOR UPDATE
+            """)
+    Long lockCurrentPublishedVersion(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId);
+
     @Select("""
             SELECT id,tenant_id,document_id,version_id,retry_count
               FROM kb_published_index_cleanup

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 
 import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
@@ -94,10 +96,16 @@ class IngestionWorkerTest {
         DocumentRepository documents = mock(DocumentRepository.class);
         DraftIndexingService indexing = mock(DraftIndexingService.class);
         IngestionProperties properties = new IngestionProperties();
+        properties.setLeaseDuration(Duration.ofMillis(90));
         IngestionTaskLease lease = new IngestionTaskLease(9L, 1L, 2L, 3L, 4L, "INDEX", "lease-9");
         when(tasks.claim(9L, properties.getWorkerId(), properties.getLeaseDuration())).thenReturn(Optional.of(lease));
         when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(version()));
+        when(tasks.renew(9L, "lease-9", properties.getLeaseDuration())).thenReturn(true);
         when(tasks.complete(9L, "lease-9")).thenReturn(true);
+        doAnswer(invocation -> {
+            Thread.sleep(160);
+            return null;
+        }).when(indexing).index(any(), any(), anyLong(), any());
         IngestionWorker worker = new IngestionWorker(
                 tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class),
                 mock(IngestionArtifactRepository.class),
@@ -105,7 +113,9 @@ class IngestionWorkerTest {
 
         assertThat(worker.process(9L)).isTrue();
 
-        verify(indexing).index(any());
+        verify(indexing).index(any(), any(), org.mockito.ArgumentMatchers.eq(9L),
+                org.mockito.ArgumentMatchers.eq("lease-9"));
+        verify(tasks, atLeastOnce()).renew(9L, "lease-9", properties.getLeaseDuration());
         verify(tasks).complete(9L, "lease-9");
     }
 

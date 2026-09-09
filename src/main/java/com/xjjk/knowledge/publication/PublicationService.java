@@ -9,6 +9,7 @@ import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.retrieval.indexing.PublicationIndexService;
 import com.xjjk.knowledge.tenant.TenantAccessGuard;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +31,7 @@ public class PublicationService {
         this.audit = audit;
     }
 
+    @Transactional
     public PublicationRecord publish(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, long versionId,
             String requestId) {
@@ -37,6 +39,7 @@ public class PublicationService {
                 requestId, PublicationAction.PUBLISH);
     }
 
+    @Transactional
     public PublicationRecord rollback(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, long versionId,
             String requestId) {
@@ -44,11 +47,15 @@ public class PublicationService {
                 requestId, PublicationAction.ROLLBACK);
     }
 
+    @Transactional
     public PublicationRecord disable(
             AdminPrincipal principal, long tenantId, long knowledgeBaseId, long documentId, String requestId) {
         require(principal, tenantId, requestId);
         Optional<PublicationRecord> duplicate = repository.findByRequest(tenantId, requestId);
-        if (duplicate.isPresent()) return duplicate.get();
+        if (duplicate.isPresent()) {
+            return requireMatchingDuplicate(
+                    duplicate.get(), PublicationAction.DISABLE, knowledgeBaseId, documentId, null);
+        }
         PublicationTarget target = repository.loadCurrentPublishedTarget(tenantId, knowledgeBaseId, documentId);
         PublicationRecord record = repository.disable(target, principal.userId(), requestId);
         audit.success(tenantId, principal, AuditAction.DOCUMENT_DISABLE, "DOCUMENT", Long.toString(documentId),
@@ -61,8 +68,17 @@ public class PublicationService {
             String requestId, PublicationAction action) {
         require(principal, tenantId, requestId);
         Optional<PublicationRecord> duplicate = repository.findByRequest(tenantId, requestId);
-        if (duplicate.isPresent()) return duplicate.get();
+        if (duplicate.isPresent()) {
+            return requireMatchingDuplicate(
+                    duplicate.get(), action, knowledgeBaseId, documentId, versionId);
+        }
         PublicationTarget target = repository.loadVersionTarget(tenantId, knowledgeBaseId, documentId, versionId);
+        // 首次查询与取得文档行锁之间可能已有并发请求完成；锁后再读一次即可返回同一结果。
+        duplicate = repository.findByRequest(tenantId, requestId);
+        if (duplicate.isPresent()) {
+            return requireMatchingDuplicate(
+                    duplicate.get(), action, knowledgeBaseId, documentId, versionId);
+        }
         if (action == PublicationAction.PUBLISH
                 && (target.version().status() != DocumentStatus.READY
                 || !Long.valueOf(versionId).equals(target.document().currentDraftVersionId()))) {
@@ -73,6 +89,12 @@ public class PublicationService {
                 && target.version().status() != DocumentStatus.PUBLISHED
                 && target.version().status() != DocumentStatus.ARCHIVED) {
             throw new BusinessException(ApiErrorCode.PUBLICATION_CONFLICT);
+        }
+        if (action == PublicationAction.ROLLBACK
+                && Long.valueOf(versionId).equals(target.document().currentPublishedVersionId())) {
+            // 对当前线上版本执行 delete→rewrite 会在任一外部步骤失败时破坏可用性，明确拒绝无效回滚。
+            throw new BusinessException(ApiErrorCode.PUBLICATION_CONFLICT,
+                    "目标版本已经是当前发布版本");
         }
         indexes.preparePublished(target.version());
         PublicationRecord record = repository.activate(target, action, principal.userId(), requestId);
@@ -87,5 +109,21 @@ public class PublicationService {
         if (requestId == null || requestId.isBlank() || requestId.length() > 64) {
             throw new BusinessException(ApiErrorCode.VALIDATION_FAILED);
         }
+    }
+
+    private PublicationRecord requireMatchingDuplicate(
+            PublicationRecord existing,
+            PublicationAction action,
+            long knowledgeBaseId,
+            long documentId,
+            Long targetVersionId) {
+        if (existing.action() != action
+                || existing.knowledgeBaseId() != knowledgeBaseId
+                || existing.documentId() != documentId
+                || !java.util.Objects.equals(existing.toVersionId(), targetVersionId)) {
+            throw new BusinessException(ApiErrorCode.PUBLICATION_CONFLICT,
+                    "幂等请求号已用于其他发布动作或目标");
+        }
+        return existing;
     }
 }

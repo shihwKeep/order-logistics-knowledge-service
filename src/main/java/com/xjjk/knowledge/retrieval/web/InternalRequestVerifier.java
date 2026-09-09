@@ -13,6 +13,8 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /** 校验内部调用签名，并通过 Redis 一次性 nonce 阻止请求重放。 */
 @Component
@@ -41,7 +43,8 @@ public class InternalRequestVerifier {
             long timestamp,
             String nonce,
             String suppliedSignature,
-            String question) {
+            String question,
+            List<Long> knowledgeBaseIds) {
         if (!properties.isEnabled() || tenantId <= 0 || userId <= 0
                 || nonce == null || nonce.isBlank() || nonce.length() > 128
                 || suppliedSignature == null || suppliedSignature.length() != 64
@@ -67,7 +70,8 @@ public class InternalRequestVerifier {
             reject();
             return;
         }
-        byte[] expected = hmac(canonical(tenantId, userId, timestamp, nonce, question));
+        byte[] expected = hmac(canonical(
+                tenantId, userId, timestamp, nonce, question, knowledgeBaseIds));
         if (!MessageDigest.isEqual(expected, supplied)) {
             reject();
         }
@@ -89,10 +93,16 @@ public class InternalRequestVerifier {
     }
 
     static String canonical(
-            long tenantId, long userId, long timestamp, String nonce, String question) {
+            long tenantId, long userId, long timestamp, String nonce, String question,
+            List<Long> knowledgeBaseIds) {
+        String canonicalKnowledgeBaseIds = knowledgeBaseIds == null ? "" : knowledgeBaseIds.stream()
+                .distinct()
+                .sorted()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
         return "POST\n/api/v1/internal/knowledge/retrieve\n"
                 + tenantId + "\n" + userId + "\n" + timestamp + "\n" + nonce + "\n"
-                + sha256(question.trim());
+                + sha256(question.trim()) + "\n" + canonicalKnowledgeBaseIds;
     }
 
     private byte[] hmac(String canonical) {

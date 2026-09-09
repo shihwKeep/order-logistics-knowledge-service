@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * 草稿索引编排器。只有 MySQL Chunk、ES 草稿索引和 Milvus 草稿集合完全一致时，
@@ -38,6 +39,18 @@ public class DraftIndexingService {
     }
 
     public void index(DocumentVersion version) {
+        index(version, () -> true);
+    }
+
+    public void index(DocumentVersion version, BooleanSupplier leaseHeld) {
+        index(version, leaseHeld, null, null);
+    }
+
+    public void index(
+            DocumentVersion version,
+            BooleanSupplier leaseHeld,
+            Long taskId,
+            String leaseToken) {
         List<IndexChunk> chunks = repository.loadVersionChunks(version);
         if (chunks.isEmpty() || chunks.size() != version.chunkCount()) {
             throw new IllegalStateException(
@@ -49,11 +62,15 @@ public class DraftIndexingService {
         if (vectors.size() != chunks.size()) {
             throw new IllegalStateException("Embedding 返回数量与 Chunk 数量不一致");
         }
+        requireLease(leaseHeld);
 
         keywordIndex.ensureReady();
         vectorIndex.ensureReady();
+        requireLease(leaseHeld);
         keywordIndex.replaceVersion(IndexLayer.DRAFT, chunks);
+        requireLease(leaseHeld);
         vectorIndex.replaceVersion(IndexLayer.DRAFT, chunks, vectors);
+        requireLease(leaseHeld);
 
         Map<String, String> expected = IndexManifest.fingerprints(chunks);
         Map<String, String> keywordActual = keywordIndex.verifyVersion(
@@ -63,9 +80,17 @@ public class DraftIndexingService {
         if (!expected.equals(keywordActual) || !expected.equals(vectorActual)) {
             throw new IllegalStateException("ES/Milvus 索引校验未通过，拒绝标记 READY");
         }
+        requireLease(leaseHeld);
 
         repository.markReady(version, new ReadyIndexMetadata(
                 embeddingProperties.getModel(), embeddingProperties.getDimension(),
-                embeddingProperties.getInstructionVersion(), IndexManifest.sha256(chunks)));
+                embeddingProperties.getInstructionVersion(), IndexManifest.sha256(chunks)),
+                taskId, leaseToken);
+    }
+
+    private void requireLease(BooleanSupplier leaseHeld) {
+        if (!leaseHeld.getAsBoolean()) {
+            throw new IngestionLeaseLostException();
+        }
     }
 }

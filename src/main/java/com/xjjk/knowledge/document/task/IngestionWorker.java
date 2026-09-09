@@ -11,6 +11,7 @@ import com.xjjk.knowledge.document.processing.DocumentChunk;
 import com.xjjk.knowledge.document.processing.StructuralChunker;
 import com.xjjk.knowledge.document.storage.SourceObjectStore;
 import com.xjjk.knowledge.retrieval.indexing.DraftIndexingService;
+import com.xjjk.knowledge.retrieval.indexing.IngestionLeaseLostException;
 import java.io.InputStream;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -58,8 +59,16 @@ public class IngestionWorker {
                             lease.tenantId(), lease.documentId(), lease.versionId())
                     .orElseThrow(() -> new IllegalStateException("任务对应的文档版本不存在"));
             if ("INDEX".equals(lease.stage())) {
-                indexing.index(version);
-                return tasks.complete(lease.taskId(), lease.leaseToken());
+                try (IngestionLeaseHeartbeat heartbeat = new IngestionLeaseHeartbeat(
+                        tasks, lease, properties.getLeaseDuration())) {
+                    if (!heartbeat.start()) {
+                        return false;
+                    }
+                    indexing.index(
+                            version, heartbeat::isHeld, lease.taskId(), lease.leaseToken());
+                    return heartbeat.isHeld()
+                            && tasks.complete(lease.taskId(), lease.leaseToken());
+                }
             }
             if ("CHUNK".equals(lease.stage())) {
                 ParsedDocument parsed = artifacts.loadEffectiveUnits(version);
@@ -79,6 +88,9 @@ public class IngestionWorker {
                     version.tenantId(), version.documentId(), version.id(), parsed.units());
             artifacts.replaceParsedArtifacts(version, parsed, chunks, parser.version());
             return tasks.complete(lease.taskId(), lease.leaseToken());
+        } catch (IngestionLeaseLostException exception) {
+            // 租约已转移给其他 Worker，旧 Worker 不能覆盖版本失败状态或新任务结果。
+            return false;
         } catch (Exception exception) {
             String code = exception instanceof BusinessException business
                     ? business.errorCode().code() : "DOCUMENT_INGESTION_FAILED";

@@ -77,6 +77,19 @@ class PublicationServiceTest {
     }
 
     @Test
+    void rejectsReusingIdempotencyKeyForAnotherActionOrTarget() {
+        PublicationRepository repository = mock(PublicationRepository.class);
+        PublicationIndexService indexes = mock(PublicationIndexService.class);
+        PublicationRecord existing = record(PublicationAction.PUBLISH, null, 4L);
+        when(repository.findByRequest(1L, "same-request")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service(repository, indexes)
+                .rollback(principal(), 1L, 2L, 3L, 5L, "same-request"))
+                .isInstanceOf(com.xjjk.knowledge.common.error.BusinessException.class);
+        verify(indexes, never()).preparePublished(any());
+    }
+
+    @Test
     void rollbackUsesSamePrepareThenSwitchProtocol() {
         PublicationRepository repository = mock(PublicationRepository.class);
         PublicationIndexService indexes = mock(PublicationIndexService.class);
@@ -91,6 +104,21 @@ class PublicationServiceTest {
         InOrder order = inOrder(indexes, repository);
         order.verify(indexes).preparePublished(target.version());
         order.verify(repository).activate(target, PublicationAction.ROLLBACK, 10567L, "rollback-1");
+    }
+
+    @Test
+    void rollbackToAlreadyCurrentVersionIsRejectedBeforeRewritingLiveIndexes() {
+        PublicationRepository repository = mock(PublicationRepository.class);
+        PublicationIndexService indexes = mock(PublicationIndexService.class);
+        PublicationTarget target = target(DocumentStatus.PUBLISHED, 4L);
+        when(repository.findByRequest(1L, "rollback-current")).thenReturn(Optional.empty());
+        when(repository.loadVersionTarget(1L, 2L, 3L, 4L)).thenReturn(target);
+
+        assertThatThrownBy(() -> service(repository, indexes)
+                .rollback(principal(), 1L, 2L, 3L, 4L, "rollback-current"))
+                .isInstanceOf(com.xjjk.knowledge.common.error.BusinessException.class);
+        verify(indexes, never()).preparePublished(any());
+        verify(repository, never()).activate(any(), any(), anyLong(), any());
     }
 
     @Test

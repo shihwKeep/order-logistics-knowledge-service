@@ -33,14 +33,16 @@ public class MybatisPublicationRepository implements PublicationRepository {
 
     @Override
     public PublicationTarget loadVersionTarget(long tenantId, long knowledgeBaseId, long documentId, long versionId) {
-        DocumentEntity document = mapper.findDocument(tenantId, knowledgeBaseId, documentId);
-        DocumentVersionEntity version = mapper.findVersion(tenantId, knowledgeBaseId, documentId, versionId);
+        // PublicationService 在外层事务中调用此方法，因此这里先锁文档再准备外部索引，
+        // 与旧索引清理共用同一行锁，保证发布/回滚和清理不会交叉破坏线上版本。
+        DocumentEntity document = mapper.lockDocument(tenantId, knowledgeBaseId, documentId);
+        DocumentVersionEntity version = mapper.lockVersion(tenantId, knowledgeBaseId, documentId, versionId);
         return target(document, version);
     }
 
     @Override
     public PublicationTarget loadCurrentPublishedTarget(long tenantId, long knowledgeBaseId, long documentId) {
-        DocumentEntity document = mapper.findDocument(tenantId, knowledgeBaseId, documentId);
+        DocumentEntity document = mapper.lockDocument(tenantId, knowledgeBaseId, documentId);
         if (document == null || document.getCurrentPublishedVersionId() == null) {
             throw new BusinessException(ApiErrorCode.PUBLICATION_CONFLICT, "当前文档没有已发布版本");
         }
@@ -55,7 +57,7 @@ public class MybatisPublicationRepository implements PublicationRepository {
             PublicationTarget expected, PublicationAction action, long actorUserId, String requestId) {
         Optional<PublicationRecord> duplicate = findByRequest(expected.document().tenantId(), requestId);
         if (duplicate.isPresent()) {
-            return duplicate.get();
+            return requireMatchingDuplicate(duplicate.get(), expected, action);
         }
         KnowledgeDocument snapshot = expected.document();
         DocumentEntity lockedDocument = mapper.lockDocument(
@@ -88,6 +90,8 @@ public class MybatisPublicationRepository implements PublicationRepository {
             mapper.updateVersionStatus(snapshot.tenantId(), snapshot.id(), fromVersionId, DocumentStatus.ARCHIVED.name());
         }
         mapper.updateVersionStatus(snapshot.tenantId(), snapshot.id(), toVersionId, DocumentStatus.PUBLISHED.name());
+        // A→B 后回滚 A 时，取消尚未执行的 cleanup(A)；已开始的任务受同一文档行锁保护。
+        mapper.cancelCleanupForVersion(snapshot.tenantId(), snapshot.id(), toVersionId);
         PublicationRecordEntity entity = newRecord(
                 expected, fromVersionId, toVersionId, action, actorUserId, requestId);
         mapper.insertRecord(entity);
@@ -102,7 +106,7 @@ public class MybatisPublicationRepository implements PublicationRepository {
     public PublicationRecord disable(PublicationTarget expected, long actorUserId, String requestId) {
         Optional<PublicationRecord> duplicate = findByRequest(expected.document().tenantId(), requestId);
         if (duplicate.isPresent()) {
-            return duplicate.get();
+            return requireMatchingDuplicate(duplicate.get(), expected, PublicationAction.DISABLE);
         }
         KnowledgeDocument snapshot = expected.document();
         DocumentEntity locked = mapper.lockDocument(snapshot.tenantId(), snapshot.knowledgeBaseId(), snapshot.id());
@@ -151,6 +155,21 @@ public class MybatisPublicationRepository implements PublicationRepository {
     private PublicationRecord requireInserted(long tenantId, String requestId) {
         return findByRequest(tenantId, requestId)
                 .orElseThrow(() -> new IllegalStateException("发布记录插入后无法读取"));
+    }
+
+    private PublicationRecord requireMatchingDuplicate(
+            PublicationRecord existing, PublicationTarget expected, PublicationAction action) {
+        boolean targetMatches = action == PublicationAction.DISABLE
+                ? existing.toVersionId() == null
+                : Long.valueOf(expected.version().id()).equals(existing.toVersionId());
+        if (existing.action() != action
+                || existing.knowledgeBaseId() != expected.document().knowledgeBaseId()
+                || existing.documentId() != expected.document().id()
+                || !targetMatches) {
+            throw new BusinessException(ApiErrorCode.PUBLICATION_CONFLICT,
+                    "幂等请求号已用于其他发布动作或目标");
+        }
+        return existing;
     }
 
     private PublicationRecord toRecord(PublicationRecordEntity entity) {

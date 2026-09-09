@@ -56,7 +56,10 @@ public class ElasticsearchKeywordIndex implements KeywordIndex {
                         "index", Map.of("_index", properties.indexName(layer), "_id", chunk.chunkId())))).append('\n');
                 ndjson.append(objectMapper.writeValueAsString(toDocument(chunk))).append('\n');
             }
-            JsonNode response = sendJson("POST", "/_bulk", ndjson.toString(), "application/x-ndjson");
+            // 后续会立刻通过 _search 校验清单；wait_for 保证本批数据已对搜索可见，
+            // 避免 Elasticsearch 近实时刷新窗口导致版本被误判为索引失败。
+            JsonNode response = sendJson(
+                    "POST", "/_bulk?refresh=wait_for", ndjson.toString(), "application/x-ndjson");
             if (response.path("errors").asBoolean(false)) {
                 throw new SearchIndexUnavailableException("Elasticsearch Bulk 存在失败记录");
             }

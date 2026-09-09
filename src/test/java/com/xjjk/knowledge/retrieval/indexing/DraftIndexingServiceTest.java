@@ -72,6 +72,28 @@ class DraftIndexingServiceTest {
         assertThat(repository.ready).isNull();
     }
 
+    @Test
+    void stopsBeforeExternalWritesWhenTaskLeaseHasBeenLost() {
+        DocumentVersion version = version(1);
+        FakeChunkIndexRepository repository = new FakeChunkIndexRepository(List.of(chunk(0, "hash-a")));
+        FakeKeywordIndex keyword = new FakeKeywordIndex();
+        FakeVectorIndex vector = new FakeVectorIndex();
+        EmbeddingClient embeddings = new EmbeddingClient() {
+            @Override public List<List<Float>> embedDocuments(List<String> documents) {
+                return List.of(List.of(1F));
+            }
+            @Override public List<Float> embedQuery(String query) { throw new UnsupportedOperationException(); }
+        };
+        DraftIndexingService service = new DraftIndexingService(
+                repository, embeddings, new EmbeddingProperties(), keyword, vector);
+
+        assertThatThrownBy(() -> service.index(version, () -> false))
+                .isInstanceOf(IngestionLeaseLostException.class);
+        assertThat(keyword.layer).isNull();
+        assertThat(vector.layer).isNull();
+        assertThat(repository.ready).isNull();
+    }
+
     private static DocumentVersion version(int chunkCount) {
         LocalDateTime now = LocalDateTime.now();
         return new DocumentVersion(

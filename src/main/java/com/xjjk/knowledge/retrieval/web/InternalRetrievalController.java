@@ -41,7 +41,9 @@ public class InternalRetrievalController {
             @Valid @RequestBody RetrieveKnowledgeRequest body,
             HttpServletRequest request,
             HttpServletResponse response) {
-        verifier.verify(tenantId, userId, timestamp, nonce, signature, body.question());
+        verifier.verify(
+                tenantId, userId, timestamp, nonce, signature,
+                body.question(), body.knowledgeBaseIds());
         String requestId = prepareRequestId(request, response);
         return ApiResponse.success(RetrieveKnowledgeResponse.from(service.retrieve(
                 tenantId, userId, requestId, body.question(), body.knowledgeBaseIds())));

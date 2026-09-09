@@ -10,4 +10,9 @@ public interface ChunkIndexRepository {
     List<IndexChunk> loadVersionChunks(DocumentVersion version);
 
     void markReady(DocumentVersion version, ReadyIndexMetadata metadata);
+
+    default void markReady(
+            DocumentVersion version, ReadyIndexMetadata metadata, Long taskId, String leaseToken) {
+        markReady(version, metadata);
+    }
 }

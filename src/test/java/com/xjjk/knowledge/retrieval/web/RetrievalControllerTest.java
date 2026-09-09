@@ -34,7 +34,8 @@ class RetrievalControllerTest {
     void internalEndpointVerifiesCallerAndReturnsStableEvidenceShape() throws Exception {
         HybridRetrievalService service = mock(HybridRetrievalService.class);
         InternalRequestVerifier verifier = mock(InternalRequestVerifier.class);
-        doNothing().when(verifier).verify(eq(1L), eq(10567L), eq(1000L), eq("nonce"), eq("signature"), eq("怎么退款"));
+        doNothing().when(verifier).verify(
+                eq(1L), eq(10567L), eq(1000L), eq("nonce"), eq("signature"), eq("怎么退款"), eq(List.of(2L)));
         when(service.retrieve(eq(1L), eq(10567L), any(), eq("怎么退款"), eq(List.of(2L))))
                 .thenReturn(result());
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new InternalRetrievalController(service, verifier))

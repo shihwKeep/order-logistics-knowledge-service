@@ -49,6 +49,16 @@ class MilvusVectorIndexTest {
                 .hasMessageContaining("维度");
     }
 
+    @Test
+    void rejectsExistingCollectionWithDifferentMetric() {
+        CapturingGateway gateway = new CapturingGateway();
+        gateway.described = new MilvusCollectionSpec("knowledge_chunks_draft_v1", 2560, "L2", "chunk_id");
+
+        assertThatThrownBy(() -> new MilvusVectorIndex(gateway, new MilvusProperties()).ensureReady())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Schema");
+    }
+
     private IndexChunk chunk() {
         return new IndexChunk("1-3-4-0", 1L, 2L, 3L, 4L, 0,
                 "退款规则", "售后", "签收后七日内可申请退款", "abc", "{\"pageNumber\":3}");
