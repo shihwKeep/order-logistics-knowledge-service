@@ -13,6 +13,8 @@ import com.xjjk.knowledge.document.web.dto.DocumentResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentUnitResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentVersionResponse;
 import com.xjjk.knowledge.document.web.dto.IngestionTaskResponse;
+import com.xjjk.knowledge.publication.PublicationRecord;
+import com.xjjk.knowledge.publication.PublicationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.Positive;
@@ -46,19 +48,29 @@ public class DocumentController {
     private final DocumentUploadService uploadService;
     private final DocumentQueryService queryService;
     private final DocumentCorrectionService correctionService;
+    private final PublicationService publicationService;
 
     public DocumentController(DocumentUploadService uploadService) {
-        this(uploadService, null, null);
+        this(uploadService, null, null, null);
+    }
+
+    public DocumentController(
+            DocumentUploadService uploadService,
+            DocumentQueryService queryService,
+            DocumentCorrectionService correctionService) {
+        this(uploadService, queryService, correctionService, null);
     }
 
     @Autowired
     public DocumentController(
             DocumentUploadService uploadService,
             DocumentQueryService queryService,
-            DocumentCorrectionService correctionService) {
+            DocumentCorrectionService correctionService,
+            PublicationService publicationService) {
         this.uploadService = uploadService;
         this.queryService = queryService;
         this.correctionService = correctionService;
+        this.publicationService = publicationService;
     }
 
     @GetMapping
@@ -190,6 +202,36 @@ public class DocumentController {
         } catch (IOException exception) {
             throw new BusinessException(ApiErrorCode.DOCUMENT_STORAGE_UNAVAILABLE, exception);
         }
+    }
+
+    @PostMapping("/{documentId}/versions/{versionId}/publish")
+    public ApiResponse<PublicationRecord> publish(
+            @PathVariable @Positive long tenantId, @PathVariable @Positive long knowledgeBaseId,
+            @PathVariable @Positive long documentId, @PathVariable @Positive long versionId,
+            Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
+        String requestId = prepareRequestId(request, response);
+        return ApiResponse.success(publicationService.publish(
+                principal(authentication), tenantId, knowledgeBaseId, documentId, versionId, requestId));
+    }
+
+    @PostMapping("/{documentId}/versions/{versionId}/rollback")
+    public ApiResponse<PublicationRecord> rollback(
+            @PathVariable @Positive long tenantId, @PathVariable @Positive long knowledgeBaseId,
+            @PathVariable @Positive long documentId, @PathVariable @Positive long versionId,
+            Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
+        String requestId = prepareRequestId(request, response);
+        return ApiResponse.success(publicationService.rollback(
+                principal(authentication), tenantId, knowledgeBaseId, documentId, versionId, requestId));
+    }
+
+    @PostMapping("/{documentId}/disable")
+    public ApiResponse<PublicationRecord> disable(
+            @PathVariable @Positive long tenantId, @PathVariable @Positive long knowledgeBaseId,
+            @PathVariable @Positive long documentId,
+            Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
+        String requestId = prepareRequestId(request, response);
+        return ApiResponse.success(publicationService.disable(
+                principal(authentication), tenantId, knowledgeBaseId, documentId, requestId));
     }
 
     private AdminPrincipal principal(Authentication authentication) {

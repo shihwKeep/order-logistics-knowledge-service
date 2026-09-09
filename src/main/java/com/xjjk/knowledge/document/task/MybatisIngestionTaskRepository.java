@@ -41,6 +41,11 @@ public class MybatisIngestionTaskRepository implements IngestionTaskRepository {
     }
 
     @Override
+    public boolean renew(long taskId, String leaseToken, Duration leaseDuration) {
+        return mapper.renew(taskId, leaseToken, LocalDateTime.now().plus(leaseDuration)) == 1;
+    }
+
+    @Override
     public boolean complete(long taskId, String leaseToken) {
         return mapper.complete(taskId, leaseToken) == 1;
     }

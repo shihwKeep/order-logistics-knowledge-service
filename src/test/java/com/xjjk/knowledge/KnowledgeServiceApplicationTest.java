@@ -6,6 +6,11 @@ import com.xjjk.knowledge.document.service.DocumentManagementMapper;
 import com.xjjk.knowledge.document.task.IngestionArtifactMapper;
 import com.xjjk.knowledge.document.task.IngestionTaskMapper;
 import com.xjjk.knowledge.knowledgebase.persistence.KnowledgeBaseMapper;
+import com.xjjk.knowledge.retrieval.indexing.ChunkIndexMapper;
+import com.xjjk.knowledge.retrieval.service.PublishedVersionMapper;
+import com.xjjk.knowledge.retrieval.service.SearchLogMapper;
+import com.xjjk.knowledge.publication.PublicationMapper;
+import com.xjjk.knowledge.retrieval.service.DraftVersionMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -48,6 +53,21 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private IngestionTaskMapper ingestionTaskMapper;
+
+    @MockitoBean
+    private ChunkIndexMapper chunkIndexMapper;
+
+    @MockitoBean
+    private PublishedVersionMapper publishedVersionMapper;
+
+    @MockitoBean
+    private SearchLogMapper searchLogMapper;
+
+    @MockitoBean
+    private PublicationMapper publicationMapper;
+
+    @MockitoBean
+    private DraftVersionMapper draftVersionMapper;
 
     @MockitoBean
     private StringRedisTemplate redisTemplate;

@@ -9,6 +9,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -46,6 +47,9 @@ class FoundationMigrationTest {
                 "flyway_schema_history",
                 "kb_knowledge_base",
                 "kb_audit_log");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        // 基础测试只关心 V1 始终存在；后续功能迁移不应导致这里随版本号反复修改。
+        assertThat(Arrays.stream(flyway.info().applied())
+                .map(info -> info.getVersion().getVersion()))
+                .contains("1");
     }
 }

@@ -10,6 +10,32 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface IngestionArtifactMapper {
+    @Insert("""
+            INSERT IGNORE INTO kb_ingestion_task
+              (tenant_id,knowledge_base_id,document_id,version_id,task_key,stage,status)
+            VALUES
+              (#{tenantId},#{knowledgeBaseId},#{documentId},#{versionId},#{taskKey},'INDEX','PENDING')
+            """)
+    int insertIndexTask(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("taskKey") String taskKey);
+
+    @Insert("""
+            INSERT INTO kb_outbox_event
+              (event_id,tenant_id,aggregate_type,aggregate_id,event_type,payload_json)
+            VALUES
+              (#{eventId},#{tenantId},'DOCUMENT_VERSION',#{aggregateId},
+               'DOCUMENT_INGESTION_REQUESTED',CAST(#{payloadJson} AS JSON))
+            """)
+    int insertIndexOutbox(
+            @Param("eventId") String eventId,
+            @Param("tenantId") long tenantId,
+            @Param("aggregateId") String aggregateId,
+            @Param("payloadJson") String payloadJson);
+
     @Select("""
             SELECT id,tenant_id,document_id,version_id,unit_type,unit_index,location_label,title_path,
                    raw_text,effective_text,ocr_confidence,low_confidence,content_sha256
@@ -88,13 +114,47 @@ public interface IngestionArtifactMapper {
             @Param("chunkCount") int chunkCount);
 
     @Update("""
-            UPDATE kb_document_version SET status='FAILED',failure_stage=#{stage},last_error_code=#{errorCode}
-             WHERE tenant_id=#{tenantId} AND document_id=#{documentId} AND id=#{versionId}
+            UPDATE kb_document_version v
+               SET v.status='INDEXING',v.failure_stage=NULL,
+                   v.last_error_code=NULL,v.last_error_message=NULL
+             WHERE v.tenant_id=#{tenantId} AND v.document_id=#{documentId} AND v.id=#{versionId}
+               AND v.correction_revision=#{correctionRevision}
+               AND (v.status='INDEXING' OR (v.status='FAILED' AND v.failure_stage='INDEX'))
+               AND EXISTS (
+                    SELECT 1 FROM kb_ingestion_task t
+                     WHERE t.id=#{taskId} AND t.status='PROCESSING'
+                       AND t.lease_token=#{leaseToken}
+                       AND t.locked_until>=CURRENT_TIMESTAMP(3)
+               )
             """)
-    int markFailed(
+    int prepareIndexAttempt(
             @Param("tenantId") long tenantId,
             @Param("documentId") long documentId,
             @Param("versionId") long versionId,
+            @Param("correctionRevision") int correctionRevision,
+            @Param("taskId") long taskId,
+            @Param("leaseToken") String leaseToken);
+
+    @Update("""
+            UPDATE kb_document_version v
+               SET v.status='FAILED',v.failure_stage=#{stage},v.last_error_code=#{errorCode}
+             WHERE v.tenant_id=#{tenantId} AND v.document_id=#{documentId} AND v.id=#{versionId}
+               AND v.correction_revision=#{correctionRevision}
+               AND v.status NOT IN ('READY','PUBLISHED','ARCHIVED')
+               AND EXISTS (
+                    SELECT 1 FROM kb_ingestion_task t
+                     WHERE t.id=#{taskId} AND t.status='PROCESSING'
+                       AND t.lease_token=#{leaseToken}
+                       AND t.locked_until>=CURRENT_TIMESTAMP(3)
+               )
+            """)
+    int markFailedIfOwned(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("correctionRevision") int correctionRevision,
+            @Param("taskId") long taskId,
+            @Param("leaseToken") String leaseToken,
             @Param("stage") String stage,
             @Param("errorCode") String errorCode);
 }

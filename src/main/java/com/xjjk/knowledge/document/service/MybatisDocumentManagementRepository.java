@@ -32,12 +32,21 @@ public class MybatisDocumentManagementRepository implements DocumentManagementRe
     public DocumentUnit correctUnit(
             long tenantId, long knowledgeBaseId, long documentId, long versionId, long unitId,
             String correctedText, long actorId, String requestId) {
-        Integer currentRevision = mapper.lockCorrectionRevision(tenantId, knowledgeBaseId, documentId, versionId);
-        DocumentUnitRow row = mapper.findUnit(tenantId, knowledgeBaseId, documentId, versionId, unitId);
-        if (currentRevision == null || row == null) {
+        CorrectionVersionState state = mapper.lockCorrectionState(
+                tenantId, knowledgeBaseId, documentId, versionId);
+        if (state == null) {
             throw new BusinessException(ApiErrorCode.DOCUMENT_UNIT_NOT_FOUND);
         }
-        int revision = currentRevision + 1;
+        // 发布版本是不可变快照。修改正文必须形成新草稿版本，不能让已发布索引与 MySQL 漂移。
+        if ("PUBLISHED".equals(state.getStatus()) || "ARCHIVED".equals(state.getStatus())) {
+            throw new BusinessException(
+                    ApiErrorCode.PUBLICATION_CONFLICT, "已发布或归档版本不能原地校正，请创建新版本");
+        }
+        DocumentUnitRow row = mapper.findUnit(tenantId, knowledgeBaseId, documentId, versionId, unitId);
+        if (row == null) {
+            throw new BusinessException(ApiErrorCode.DOCUMENT_UNIT_NOT_FOUND);
+        }
+        int revision = state.getCorrectionRevision() + 1;
         mapper.insertRevision(
                 tenantId, documentId, versionId, unitId, revision,
                 row.getEffectiveText(), correctedText, actorId, requestId);

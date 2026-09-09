@@ -106,7 +106,8 @@ public class AdminSessionFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return "DELETE".equals(request.getMethod())
                 || path.endsWith("/publish")
-                || path.endsWith("/rollback");
+                || path.endsWith("/rollback")
+                || path.endsWith("/disable");
     }
 
     private void writeBusinessError(

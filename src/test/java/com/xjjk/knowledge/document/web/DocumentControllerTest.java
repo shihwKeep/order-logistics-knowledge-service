@@ -8,6 +8,9 @@ import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.domain.KnowledgeDocument;
 import com.xjjk.knowledge.document.service.DocumentUploadService;
+import com.xjjk.knowledge.publication.PublicationAction;
+import com.xjjk.knowledge.publication.PublicationRecord;
+import com.xjjk.knowledge.publication.PublicationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -26,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -73,6 +77,27 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.data.currentDraftVersion.status").value("UPLOADED"));
     }
 
+    @Test
+    void publishesReadyVersionWithRequestId() throws Exception {
+        PublicationService publications = mock(PublicationService.class);
+        MockMvc publicationMvc = MockMvcBuilders
+                .standaloneSetup(new DocumentController(service, null, null, publications))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        PublicationRecord record = new PublicationRecord(
+                31L, 1L, 10L, 13L, null, 21L, PublicationAction.PUBLISH,
+                10567L, "publish-1", 2, "manifest", LocalDateTime.of(2026, 9, 9, 21, 0));
+        when(publications.publish(any(AdminPrincipal.class), eq(1L), eq(10L), eq(13L), eq(21L), eq("publish-1")))
+                .thenReturn(record);
+
+        publicationMvc.perform(post("/api/v1/admin/tenants/1/knowledge-bases/10/documents/13/versions/21/publish")
+                        .principal(authentication).header("X-Request-Id", "publish-1"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", "publish-1"))
+                .andExpect(jsonPath("$.data.action").value("PUBLISH"))
+                .andExpect(jsonPath("$.data.toVersionId").value(21));
+    }
+
     private CreatedDocument createdDocument() {
         LocalDateTime now = LocalDateTime.of(2026, 9, 9, 19, 0);
         KnowledgeDocument document = new KnowledgeDocument(
@@ -83,7 +108,7 @@ class DocumentControllerTest {
                 "refund.pdf", "pdf", "application/pdf", 16L,
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "tenant/1/knowledge-base/10/document/13/version/21/source",
-                null, null, null, false, 0, 0, 0,
+                null, null, null, null, null, null, null, null, false, 0, 0, 0,
                 null, null, null, 10567L, now, now);
         return new CreatedDocument(document, version);
     }
