@@ -25,6 +25,7 @@
         <minio.version>8.5.17</minio.version>
         <jsoup.version>1.23.2</jsoup.version>
         <commons-csv.version>1.14.1</commons-csv.version>
+        <apache-poi.version>5.5.1</apache-poi.version>
     </properties>
 
     <dependencyManagement>
@@ -103,6 +104,11 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-csv</artifactId>
             <version>${commons-csv.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${apache-poi.version}</version>
         </dependency>
 
         <dependency>
