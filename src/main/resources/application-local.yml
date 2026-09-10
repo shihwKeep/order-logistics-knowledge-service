@@ -33,8 +33,8 @@ knowledge:
     storage:
       enabled: ${KNOWLEDGE_MINIO_ENABLED:true}
       endpoint: ${KNOWLEDGE_MINIO_ENDPOINT:http://127.0.0.1:9000}
-      access-key: ${KNOWLEDGE_MINIO_ACCESS_KEY}
-      secret-key: ${KNOWLEDGE_MINIO_SECRET_KEY}
+      access-key: ${KNOWLEDGE_MINIO_ACCESS_KEY:${KNOWLEDGE_MINIO_ROOT_USER}}
+      secret-key: ${KNOWLEDGE_MINIO_SECRET_KEY:${KNOWLEDGE_MINIO_ROOT_PASSWORD}}
       bucket: ${KNOWLEDGE_MINIO_BUCKET:knowledge-documents}
       max-file-size: 100MB
     ocr:

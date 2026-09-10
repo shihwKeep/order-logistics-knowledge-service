@@ -22,6 +22,8 @@ class ConfigurationContractTest {
         assertThat(localYaml)
                 .contains("base-url: ${SSPX_BASE_URL:http://127.0.0.1:9092}")
                 .contains("endpoint: ${KNOWLEDGE_MINIO_ENDPOINT:http://127.0.0.1:9000}")
+                .contains("access-key: ${KNOWLEDGE_MINIO_ACCESS_KEY:${KNOWLEDGE_MINIO_ROOT_USER}}")
+                .contains("secret-key: ${KNOWLEDGE_MINIO_SECRET_KEY:${KNOWLEDGE_MINIO_ROOT_PASSWORD}}")
                 .contains("password: ${KNOWLEDGE_RABBITMQ_PASSWORD}")
                 .contains("base-url: ${KNOWLEDGE_OCR_BASE_URL:http://127.0.0.1:8091}")
                 .contains("max-file-size: 100MB")
