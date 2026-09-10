@@ -50,6 +50,22 @@ class OllamaEmbeddingClientTest {
         }
     }
 
+    @Test
+    void acceptsOllamaRuntimeMetadataFields() throws Exception {
+        AtomicReference<String> body = new AtomicReference<>();
+        String response = new String(response(1, 4), StandardCharsets.UTF_8);
+        response = response.substring(0, response.length() - 1)
+                + ",\"total_duration\":343000000,\"load_duration\":12000000,\"prompt_eval_count\":18}";
+        HttpServer server = server(body, response.getBytes(StandardCharsets.UTF_8));
+        try {
+            OllamaEmbeddingClient client = new OllamaEmbeddingClient(properties(server, 4));
+
+            assertThat(client.embedQuery("员工手册")).hasSize(4);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpServer server(AtomicReference<String> body, byte[] response) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/api/embed", exchange -> {

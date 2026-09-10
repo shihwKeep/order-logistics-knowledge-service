@@ -1,5 +1,6 @@
 package com.xjjk.knowledge.retrieval.embedding;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,5 +112,7 @@ public class OllamaEmbeddingClient implements EmbeddingClient {
     }
 
     private record EmbedRequest(String model, List<String> input, boolean truncate, int dimensions) {}
+    /** Ollama 会附带耗时、Token 数等运行时元数据，客户端只读取稳定的向量字段。 */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record EmbedResponse(String model, List<List<Float>> embeddings) {}
 }
