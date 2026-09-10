@@ -57,8 +57,7 @@ public class AdminRoleRefresher {
             return session;
         }
 
-        List<SspxRolePayload> payloads = identityClient.knowledgeRoles(
-                session.accessToken(), session.principal().userId());
+        List<SspxRolePayload> payloads = identityClient.knowledgeRoles(session.accessToken());
         Set<KnowledgeRole> roles = mapValidRoles(payloads);
         if (roles.isEmpty()) {
             // 权限已经被撤销时必须销毁会话，不能只拒绝当前一次请求。

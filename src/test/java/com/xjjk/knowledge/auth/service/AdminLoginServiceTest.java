@@ -55,7 +55,7 @@ class AdminLoginServiceTest {
 
     @Test
     void createsSessionForKnowledgeAdmin() {
-        when(identityClient.knowledgeRoles("access", 10567L))
+        when(identityClient.knowledgeRoles("access"))
                 .thenReturn(List.of(role("KNOWLEDGE_ADMIN", 1, false)));
 
         AdminLoginService.LoginResult result = service.login("74680", "secret");
@@ -67,7 +67,7 @@ class AdminLoginServiceTest {
 
     @Test
     void supportsSuperAdminAndUserWithBothRoles() {
-        when(identityClient.knowledgeRoles("access", 10567L))
+        when(identityClient.knowledgeRoles("access"))
                 .thenReturn(List.of(
                         role("KNOWLEDGE_SUPER_ADMIN", 1, false),
                         role("KNOWLEDGE_ADMIN", 1, false)));
@@ -82,7 +82,7 @@ class AdminLoginServiceTest {
 
     @Test
     void rejectsOrdinaryDisabledAndDeletedRolesBeforeCreatingSession() {
-        when(identityClient.knowledgeRoles("access", 10567L))
+        when(identityClient.knowledgeRoles("access"))
                 .thenReturn(List.of(
                         role("OTHER_ROLE", 1, false),
                         role("KNOWLEDGE_ADMIN", 2, false),

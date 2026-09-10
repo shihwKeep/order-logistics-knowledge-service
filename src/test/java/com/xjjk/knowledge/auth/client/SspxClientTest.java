@@ -87,7 +87,7 @@ class SspxClientTest {
                         {"Code":1000,"Msg":"success","Data":"%s"}
                         """.formatted(currentUserHex), MediaType.APPLICATION_JSON));
         server.expect(requestTo(
-                        "http://localhost:9092/SysOpenUserRole/getUserRoles?applicationId=444&userId=10567"))
+                        "http://localhost:9092/authorizationcenter/user/roles?applicationId=444"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("Authorization", "Bearer access-token"))
                 .andRespond(withSuccess("""
@@ -103,7 +103,7 @@ class SspxClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         SspxCurrentUserPayload currentUser = identityClient.currentUser("access-token");
-        List<SspxRolePayload> roles = identityClient.knowledgeRoles("access-token", currentUser.id());
+        List<SspxRolePayload> roles = identityClient.knowledgeRoles("access-token");
 
         assertThat(currentUser.id()).isEqualTo(10567L);
         assertThat(currentUser.companyId()).isEqualTo(1L);
@@ -156,19 +156,19 @@ class SspxClientTest {
     @Test
     void rejectsNonSuccessRoleEnvelopeAndMapsRole5xxToUnavailable() {
         server.expect(requestTo(
-                        "http://localhost:9092/SysOpenUserRole/getUserRoles?applicationId=444&userId=10567"))
+                        "http://localhost:9092/authorizationcenter/user/roles?applicationId=444"))
                 .andRespond(withSuccess(
                         "{\"code\":500,\"msg\":\"error\"}", MediaType.APPLICATION_JSON));
         assertAuthError(
-                () -> identityClient.knowledgeRoles("access-token", 10567L),
+                () -> identityClient.knowledgeRoles("access-token"),
                 ApiErrorCode.AUTH_INVALID);
 
         server.reset();
         server.expect(requestTo(
-                        "http://localhost:9092/SysOpenUserRole/getUserRoles?applicationId=444&userId=10567"))
+                        "http://localhost:9092/authorizationcenter/user/roles?applicationId=444"))
                 .andRespond(withStatus(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR));
         assertAuthError(
-                () -> identityClient.knowledgeRoles("access-token", 10567L),
+                () -> identityClient.knowledgeRoles("access-token"),
                 ApiErrorCode.AUTH_SERVICE_UNAVAILABLE);
     }
 

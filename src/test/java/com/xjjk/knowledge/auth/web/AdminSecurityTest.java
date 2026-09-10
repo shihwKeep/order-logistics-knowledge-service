@@ -174,7 +174,7 @@ class AdminSecurityTest {
                 repository,
                 sessionProperties,
                 clock);
-        when(identityClient.knowledgeRoles("access", 10567L)).thenReturn(List.of());
+        when(identityClient.knowledgeRoles("access")).thenReturn(List.of());
 
         assertThatThrownBy(() -> refresher.refreshIfRequired("valid", session, false))
                 .isInstanceOfSatisfying(BusinessException.class,

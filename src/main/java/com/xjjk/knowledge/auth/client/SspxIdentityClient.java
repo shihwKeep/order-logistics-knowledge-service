@@ -65,9 +65,10 @@ public class SspxIdentityClient {
         return payload;
     }
 
-    public List<SspxRolePayload> knowledgeRoles(String accessToken, long userId) {
-        String uri = "/SysOpenUserRole/getUserRoles?applicationId="
-                + properties.applicationId() + "&userId=" + userId;
+    public List<SspxRolePayload> knowledgeRoles(String accessToken) {
+        // SSPX 从 Bearer Token 中解析当前用户，调用方不再传 userId，防止越权查询他人角色。
+        String uri = "/authorizationcenter/user/roles?applicationId="
+                + properties.applicationId();
         SspxAjaxEnvelope envelope = executeGet(uri, accessToken, SspxAjaxEnvelope.class);
         if (envelope == null
                 || !Integer.valueOf(AJAX_SUCCESS_CODE).equals(envelope.code())

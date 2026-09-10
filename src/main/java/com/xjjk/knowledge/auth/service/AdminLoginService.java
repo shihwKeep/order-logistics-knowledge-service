@@ -53,8 +53,7 @@ public class AdminLoginService {
     public LoginResult login(String account, String password) {
         SspxTokenResponse token = oauthClient.passwordGrant(account, password);
         SspxCurrentUserPayload currentUser = identityClient.currentUser(token.accessToken());
-        List<SspxRolePayload> rolePayloads = identityClient.knowledgeRoles(
-                token.accessToken(), currentUser.id());
+        List<SspxRolePayload> rolePayloads = identityClient.knowledgeRoles(token.accessToken());
         Set<KnowledgeRole> roles = mapValidRoles(rolePayloads);
         if (roles.isEmpty()) {
             throw new BusinessException(ApiErrorCode.KNOWLEDGE_ACCESS_DENIED);
