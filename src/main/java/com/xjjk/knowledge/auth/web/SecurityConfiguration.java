@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 import java.io.IOException;
@@ -56,7 +57,12 @@ public class SecurityConfiguration {
                         .authenticationEntryPoint((request, response, exception) ->
                                 writeError(response, objectMapper, ApiErrorCode.AUTH_REQUIRED))
                         .accessDeniedHandler((request, response, exception) ->
-                                writeError(response, objectMapper, ApiErrorCode.KNOWLEDGE_ACCESS_DENIED)))
+                                writeError(
+                                        response,
+                                        objectMapper,
+                                        exception instanceof CsrfException
+                                                ? ApiErrorCode.CSRF_INVALID
+                                                : ApiErrorCode.KNOWLEDGE_ACCESS_DENIED)))
                 .addFilterBefore(adminSessionFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

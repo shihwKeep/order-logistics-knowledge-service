@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 public enum ApiErrorCode {
     AUTH_REQUIRED("AUTH_REQUIRED", "请先登录", HttpStatus.UNAUTHORIZED),
     AUTH_INVALID("AUTH_INVALID", "登录状态无效，请重新登录", HttpStatus.UNAUTHORIZED),
+    CSRF_INVALID("CSRF_INVALID", "请求校验已失效，请重试", HttpStatus.FORBIDDEN),
     INTERNAL_SIGNATURE_INVALID("INTERNAL_SIGNATURE_INVALID", "内部调用签名无效", HttpStatus.UNAUTHORIZED),
     AUTH_SERVICE_UNAVAILABLE("AUTH_SERVICE_UNAVAILABLE", "认证服务暂时不可用", HttpStatus.SERVICE_UNAVAILABLE),
     KNOWLEDGE_ACCESS_DENIED("KNOWLEDGE_ACCESS_DENIED", "无知识库管理权限", HttpStatus.FORBIDDEN),

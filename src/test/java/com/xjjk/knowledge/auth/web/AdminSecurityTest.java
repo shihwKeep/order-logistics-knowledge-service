@@ -101,7 +101,8 @@ class AdminSecurityTest {
 
         mvc.perform(post("/api/v1/admin/security-probe")
                         .cookie(new jakarta.servlet.http.Cookie("KB_ADMIN_SESSION", "valid")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CSRF_INVALID"));
     }
 
     @Test
