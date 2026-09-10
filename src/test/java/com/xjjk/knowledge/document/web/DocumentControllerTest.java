@@ -8,6 +8,7 @@ import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.domain.KnowledgeDocument;
 import com.xjjk.knowledge.document.service.DocumentUploadService;
+import com.xjjk.knowledge.document.service.DocumentQueryService;
 import com.xjjk.knowledge.publication.PublicationAction;
 import com.xjjk.knowledge.publication.PublicationRecord;
 import com.xjjk.knowledge.publication.PublicationService;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -96,6 +98,36 @@ class DocumentControllerTest {
                 .andExpect(header().string("X-Request-Id", "publish-1"))
                 .andExpect(jsonPath("$.data.action").value("PUBLISH"))
                 .andExpect(jsonPath("$.data.toVersionId").value(21));
+    }
+
+    @Test
+    void listsDocumentsWithTheirVersionStatusAndChunkCount() throws Exception {
+        DocumentQueryService queries = mock(DocumentQueryService.class);
+        MockMvc queryMvc = MockMvcBuilders
+                .standaloneSetup(new DocumentController(service, queries, null, null))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        CreatedDocument created = createdDocument();
+        DocumentVersion uploaded = created.version();
+        DocumentVersion ready = new DocumentVersion(
+                uploaded.id(), uploaded.tenantId(), uploaded.knowledgeBaseId(), uploaded.documentId(),
+                uploaded.versionNumber(), DocumentStatus.READY, uploaded.originalFilename(),
+                uploaded.fileExtension(), uploaded.mimeType(), uploaded.fileSize(), uploaded.sourceSha256(),
+                uploaded.sourceObjectKey(), uploaded.parsedObjectKey(), uploaded.parserVersion(), uploaded.chunkStrategyVersion(),
+                "qwen3-embedding:4b-q4_K_M", 2560, "qwen3-customer-service-v1", "manifest",
+                LocalDateTime.of(2026, 9, 10, 16, 24), false, 0, 34, 34,
+                null, null, null, uploaded.createdBy(), uploaded.createdAt(), uploaded.updatedAt());
+        when(queries.list(any(AdminPrincipal.class), eq(1L), eq(10L)))
+                .thenReturn(List.of(created.document()));
+        when(queries.versions(any(AdminPrincipal.class), eq(1L), eq(10L), eq(13L)))
+                .thenReturn(List.of(ready));
+
+        queryMvc.perform(get("/api/v1/admin/tenants/1/knowledge-bases/10/documents")
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].versions[0].status").value("READY"))
+                .andExpect(jsonPath("$.data[0].versions[0].versionNumber").value(1))
+                .andExpect(jsonPath("$.data[0].versions[0].chunkCount").value(34));
     }
 
     private CreatedDocument createdDocument() {

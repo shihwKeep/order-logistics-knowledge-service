@@ -82,8 +82,14 @@ public class DocumentController {
             HttpServletRequest request,
             HttpServletResponse response) {
         prepareRequestId(request, response);
-        return ApiResponse.success(queryService.list(principal(authentication), tenantId, knowledgeBaseId)
-                .stream().map(document -> DocumentDetailResponse.from(document, List.of())).toList());
+        AdminPrincipal principal = principal(authentication);
+        return ApiResponse.success(queryService.list(principal, tenantId, knowledgeBaseId)
+                .stream()
+                .map(document -> DocumentDetailResponse.from(
+                        document,
+                        queryService.versions(
+                                principal, tenantId, knowledgeBaseId, document.id())))
+                .toList());
     }
 
     @GetMapping("/{documentId}")
