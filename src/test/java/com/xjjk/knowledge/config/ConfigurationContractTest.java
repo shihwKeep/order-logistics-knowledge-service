@@ -20,6 +20,7 @@ class ConfigurationContractTest {
                 "(?s).*client-secret:\\s*[A-Fa-f0-9]{32,}.*");
         assertThat(baseYaml).contains("port: ${KNOWLEDGE_SERVER_PORT:8084}");
         assertThat(localYaml)
+                .contains("base-url: ${SSPX_BASE_URL:http://127.0.0.1:9092}")
                 .contains("endpoint: ${KNOWLEDGE_MINIO_ENDPOINT:http://127.0.0.1:9000}")
                 .contains("password: ${KNOWLEDGE_RABBITMQ_PASSWORD}")
                 .contains("base-url: ${KNOWLEDGE_OCR_BASE_URL:http://127.0.0.1:8091}")

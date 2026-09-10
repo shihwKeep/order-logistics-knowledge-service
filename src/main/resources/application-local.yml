@@ -16,7 +16,7 @@ spring:
 
 knowledge:
   sspx:
-    base-url: ${SSPX_BASE_URL:http://127.0.0.1:8080}
+    base-url: ${SSPX_BASE_URL:http://127.0.0.1:9092}
     client-id: ${SSPX_CLIENT_ID:100006}
     client-secret: ${SSPX_CLIENT_SECRET}
     application-id: ${SSPX_APPLICATION_ID:444}
