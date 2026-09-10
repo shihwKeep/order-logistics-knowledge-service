@@ -87,6 +87,7 @@ public class SspxIdentityClient {
                 && Long.valueOf(properties.applicationId()).equals(role.applicationId())
                 && Integer.valueOf(1).equals(role.status())
                 && !Boolean.TRUE.equals(role.isDeleted())
+                && !isBlank(role.code())
                 && KNOWLEDGE_ROLE_CODES.contains(role.code());
     }
 

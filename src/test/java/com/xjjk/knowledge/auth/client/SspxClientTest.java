@@ -95,6 +95,7 @@ class SspxClientTest {
                           "code":200,
                           "msg":"ok",
                           "data":[
+                            {"applicationId":444,"companyId":1,"code":null,"status":1,"isDeleted":false},
                             {"applicationId":444,"companyId":1,"code":"KNOWLEDGE_ADMIN","status":1,"isDeleted":false},
                             {"applicationId":999,"companyId":1,"code":"KNOWLEDGE_SUPER_ADMIN","status":1,"isDeleted":false},
                             {"applicationId":444,"companyId":1,"code":"OTHER_ROLE","status":1,"isDeleted":false}
