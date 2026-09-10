@@ -92,7 +92,7 @@ class HybridRetrievalServiceTest {
     }
 
     @Test
-    void rerankerFailureKeepsOnlyStrictDualRecallCandidates() {
+    void rerankerFailureFailsClosedEvenWhenBothRecallChannelsFindTheSameCandidate() {
         Fixture fixture = new Fixture();
         fixture.vector.result = List.of(candidate("shared", RecallSource.VECTOR), candidate("vector", RecallSource.VECTOR));
         fixture.keyword.result = List.of(candidate("shared", RecallSource.KEYWORD), candidate("keyword", RecallSource.KEYWORD));
@@ -100,9 +100,10 @@ class HybridRetrievalServiceTest {
 
         var result = fixture.service().retrieve(1L, 10567L, "request-5", "问题", List.of());
 
-        assertThat(result.answerable()).isTrue();
-        assertThat(result.degradationMode()).isEqualTo(DegradationMode.RERANKER_STRICT_RRF);
-        assertThat(result.evidences()).extracting(value -> value.chunk().chunkId()).containsExactly("shared");
+        assertThat(result.answerable()).isFalse();
+        assertThat(result.degradationMode()).isEqualTo(DegradationMode.NO_RELIABLE_EVIDENCE);
+        assertThat(result.resultCode()).isEqualTo("NO_RELIABLE_EVIDENCE");
+        assertThat(result.evidences()).isEmpty();
     }
 
     @Test

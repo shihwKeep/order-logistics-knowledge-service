@@ -1,5 +1,7 @@
 package com.xjjk.knowledge.config;
 
+import com.xjjk.knowledge.retrieval.rerank.RerankerProperties;
+import com.xjjk.knowledge.retrieval.service.RetrievalProperties;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -39,5 +41,23 @@ class ConfigurationContractTest {
                 .contains("Path: /knowledge/**")
                 .contains("Target: http://127.0.0.1:8084")
                 .doesNotContain("client_secret=");
+    }
+
+    @Test
+    void localRetrievalLimitsCpuRerankingAndAllowsMeasuredInferenceTime() throws Exception {
+        String localYaml = Files.readString(Path.of("src/main/resources/application-local.yml"));
+
+        assertThat(localYaml)
+                .contains("fusion-top-k: 10")
+                .containsPattern("(?s)reranker:.*?read-timeout: 12s")
+                .contains("version: qwen3-es-milvus-rrf60-bge-v2")
+                .doesNotContain("strict-rrf-threshold");
+    }
+
+    @Test
+    void retrievalPropertyDefaultsMatchLocalCpuBudget() {
+        assertThat(new RetrievalProperties().getFusionTopK()).isEqualTo(10);
+        assertThat(new RetrievalProperties().getVersion()).isEqualTo("qwen3-es-milvus-rrf60-bge-v2");
+        assertThat(new RerankerProperties().getReadTimeout()).isEqualTo(java.time.Duration.ofSeconds(12));
     }
 }

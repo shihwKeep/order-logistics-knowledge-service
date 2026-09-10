@@ -131,17 +131,11 @@ public class HybridRetrievalService {
                     .filter(candidate -> candidate.score() >= rerankerProperties.getScoreThreshold())
                     .toList();
         } catch (RerankerUnavailableException exception) {
-            if (vectorAvailable && keywordAvailable) {
-                degradation = DegradationMode.RERANKER_STRICT_RRF;
-                selected = fused.stream()
-                        .filter(candidate -> candidate.sources().size() == 2)
-                        .filter(candidate -> candidate.rrfScore() >= properties.getStrictRrfThreshold())
-                        .toList();
-            } else {
-                degradation = DegradationMode.NO_RELIABLE_EVIDENCE;
-                resultCode = "NO_RELIABLE_EVIDENCE";
-                selected = List.of();
-            }
+            // RRF 只能说明候选在两路召回中的排名，不能证明正文足以回答问题。
+            // 精排不可用时必须保守拒答，避免把仅有词面相似性的内容交给大模型。
+            degradation = DegradationMode.NO_RELIABLE_EVIDENCE;
+            resultCode = "NO_RELIABLE_EVIDENCE";
+            selected = List.of();
         }
 
         // 终审必须在精排/降级之后、返回调用方之前执行。

@@ -14,7 +14,7 @@ public class RerankerProperties {
     private int topK = 5;
     private double scoreThreshold = 0.15D;
     private Duration connectTimeout = Duration.ofSeconds(2);
-    private Duration readTimeout = Duration.ofSeconds(8);
+    private Duration readTimeout = Duration.ofSeconds(12);
 
     @PostConstruct
     void validate() {

@@ -6,7 +6,7 @@
 
 人工发布或回滚先幂等写入两个发布层索引，验证成功后再用 MySQL 短事务切换 `current_published_version_id`。Agent 检索结束前仍会批量回查这一发布指针，因此旧索引异步清理失败也不会把旧内容返回给用户。停用文档时先清空 MySQL 发布指针，再异步清理索引。
 
-在线查询固定执行：ES IK BM25 Top30 + Milvus COSINE Top30 → 加权 RRF Top20 → `bge-reranker-v2-m3` → MySQL 指针终审 → Top5。返回证据不足时明确拒答，不让模型脱离证据编造。
+在线查询固定执行：ES IK BM25 Top30 + Milvus COSINE Top30 → 加权 RRF Top10 → `bge-reranker-v2-m3` → MySQL 指针终审 → Top5。返回证据不足时明确拒答，不让模型脱离证据编造。BGE 超时或不可用时统一返回无可靠证据，不能仅凭 RRF 排名判定知识库可以回答。
 
 ## 2. 本地依赖启动
 
@@ -97,7 +97,7 @@ POST\n/api/v1/internal/knowledge/retrieve\n{tenantId}\n{userId}\n{timestamp}\n{n
 |---|---|
 | Elasticsearch 不可用 | 使用 Milvus + BGE |
 | Embedding 或 Milvus 不可用 | 使用 Elasticsearch + BGE |
-| 仅 BGE 不可用 | 只保留同时被双路召回且达到严格 RRF 阈值的证据 |
+| 仅 BGE 不可用 | 返回 `NO_RELIABLE_EVIDENCE`，不生成知识答案 |
 | BGE 与任一路召回同时不可用 | 返回无可靠证据，不生成知识答案 |
 | 两路召回都不可用 | 返回 `KNOWLEDGE_SERVICE_UNAVAILABLE` |
 | 发布索引写入或校验失败 | MySQL 发布指针保持不变 |

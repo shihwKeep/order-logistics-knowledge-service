@@ -8,18 +8,16 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "knowledge.retrieval.strategy")
 public class RetrievalProperties {
     private int recallTopK = 30;
-    private int fusionTopK = 20;
+    private int fusionTopK = 10;
     private int finalTopK = 5;
     private double vectorWeight = 1D;
     private double keywordWeight = 1D;
-    private double strictRrfThreshold = 0.03D;
-    private String version = "qwen3-es-milvus-rrf60-bge-v1";
+    private String version = "qwen3-es-milvus-rrf60-bge-v2";
 
     @PostConstruct
     void validate() {
         if (recallTopK <= 0 || fusionTopK <= 0 || finalTopK <= 0
                 || vectorWeight <= 0D || keywordWeight <= 0D
-                || !Double.isFinite(strictRrfThreshold) || strictRrfThreshold < 0D
                 || version == null || version.isBlank()) {
             throw new IllegalArgumentException("知识检索策略配置不合法");
         }
@@ -35,8 +33,6 @@ public class RetrievalProperties {
     public void setVectorWeight(double vectorWeight) { this.vectorWeight = vectorWeight; }
     public double getKeywordWeight() { return keywordWeight; }
     public void setKeywordWeight(double keywordWeight) { this.keywordWeight = keywordWeight; }
-    public double getStrictRrfThreshold() { return strictRrfThreshold; }
-    public void setStrictRrfThreshold(double strictRrfThreshold) { this.strictRrfThreshold = strictRrfThreshold; }
     public String getVersion() { return version; }
     public void setVersion(String version) { this.version = version; }
 }
