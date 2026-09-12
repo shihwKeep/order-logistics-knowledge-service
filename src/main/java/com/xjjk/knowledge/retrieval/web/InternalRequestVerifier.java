@@ -21,6 +21,10 @@ import java.util.stream.Collectors;
 public class InternalRequestVerifier {
     private static final String ALGORITHM = "HmacSHA256";
     private static final String NONCE_KEY_PREFIX = "knowledge:internal:nonce:";
+    private static final String MEMORY_INDEX_PATH =
+            "/api/v1/internal/user-memories/index-events";
+    private static final String MEMORY_RETRIEVE_PATH =
+            "/api/v1/internal/user-memories/retrieve";
 
     private final StringRedisTemplate redis;
     private final InternalApiProperties properties;
@@ -45,10 +49,49 @@ public class InternalRequestVerifier {
             String suppliedSignature,
             String question,
             List<Long> knowledgeBaseIds) {
+        if (question == null || question.isBlank()) {
+            reject();
+        }
+        verifyCanonicalRequest(
+                tenantId, userId, timestamp, nonce, suppliedSignature,
+                canonical(tenantId, userId, timestamp, nonce,
+                        question, knowledgeBaseIds));
+    }
+
+    /**
+     * 校验已经由接口适配层计算好载荷摘要的内部请求。
+     * 路径采用白名单并参与签名，防止相同凭据跨接口重放。
+     */
+    public void verifySignedPayload(
+            String path,
+            long tenantId,
+            long userId,
+            long timestamp,
+            String nonce,
+            String suppliedSignature,
+            String payloadDigest) {
+        if ((!MEMORY_INDEX_PATH.equals(path)
+                && !MEMORY_RETRIEVE_PATH.equals(path))
+                || payloadDigest == null || payloadDigest.length() != 64
+                || !isLowerHex(payloadDigest)) {
+            reject();
+        }
+        verifyCanonicalRequest(
+                tenantId, userId, timestamp, nonce, suppliedSignature,
+                canonicalSignedPayload(
+                        path, tenantId, userId, timestamp, nonce, payloadDigest));
+    }
+
+    private void verifyCanonicalRequest(
+            long tenantId,
+            long userId,
+            long timestamp,
+            String nonce,
+            String suppliedSignature,
+            String canonical) {
         if (!properties.isEnabled() || tenantId <= 0 || userId <= 0
                 || nonce == null || nonce.isBlank() || nonce.length() > 128
-                || suppliedSignature == null || suppliedSignature.length() != 64
-                || question == null || question.isBlank()) {
+                || suppliedSignature == null || suppliedSignature.length() != 64) {
             reject();
         }
         Instant requestTime;
@@ -70,8 +113,7 @@ public class InternalRequestVerifier {
             reject();
             return;
         }
-        byte[] expected = hmac(canonical(
-                tenantId, userId, timestamp, nonce, question, knowledgeBaseIds));
+        byte[] expected = hmac(canonical);
         if (!MessageDigest.isEqual(expected, supplied)) {
             reject();
         }
@@ -103,6 +145,29 @@ public class InternalRequestVerifier {
         return "POST\n/api/v1/internal/knowledge/retrieve\n"
                 + tenantId + "\n" + userId + "\n" + timestamp + "\n" + nonce + "\n"
                 + sha256(question.trim()) + "\n" + canonicalKnowledgeBaseIds;
+    }
+
+    static String canonicalSignedPayload(
+            String path,
+            long tenantId,
+            long userId,
+            long timestamp,
+            String nonce,
+            String payloadDigest) {
+        return "POST\n" + path + "\n"
+                + tenantId + "\n" + userId + "\n" + timestamp + "\n"
+                + nonce + "\n" + payloadDigest;
+    }
+
+    private static boolean isLowerHex(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (!((character >= '0' && character <= '9')
+                    || (character >= 'a' && character <= 'f'))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private byte[] hmac(String canonical) {
