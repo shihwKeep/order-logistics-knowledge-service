@@ -25,5 +25,26 @@ management:
 
 # 灾备恢复开关必须由维护命令显式打开，日常启动不能重复计算全库向量。
 knowledge:
+  # 用户记忆使用独立 ES/Milvus 命名空间，默认关闭，必须由 Nacos 显式开启。
+  user-memory:
+    enabled: false
+    elasticsearch:
+      index-alias: agent-user-memory-active
+      index-name: agent-user-memory-v1
+    milvus:
+      collection: agent_user_memory_v1
+      dimension: 2560
+    retrieval:
+      es-top-k: 20
+      milvus-top-k: 20
+      rrf-top-k: 10
+      final-top-k: 10
+      vector-weight: 1.0
+      keyword-weight: 1.0
+      min-vector-score: 0.45
+      rerank-enabled: true
+      reranker-score-threshold: 0.50
+      timeout: 3s
+      strategy-version: user-memory-es-milvus-rrf60-bge-v1
   maintenance:
     rebuild-indexes-on-startup: false
