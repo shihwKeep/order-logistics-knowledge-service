@@ -1,6 +1,7 @@
 package com.xjjk.knowledge.usermemory.service;
 
 import com.xjjk.knowledge.retrieval.embedding.EmbeddingClient;
+import com.xjjk.knowledge.observation.KnowledgeMetrics;
 import com.xjjk.knowledge.retrieval.model.IndexChunk;
 import com.xjjk.knowledge.retrieval.model.RankedEvidence;
 import com.xjjk.knowledge.retrieval.model.RecallSource;
@@ -38,6 +39,7 @@ public class UserMemoryRetrievalService {
     private final EmbeddingClient embeddings;
     private final Reranker reranker;
     private final Executor executor;
+    private final KnowledgeMetrics metrics;
     private final MemoryRrfFusion fusion = new MemoryRrfFusion();
 
     @Autowired
@@ -47,13 +49,25 @@ public class UserMemoryRetrievalService {
             MemoryVectorIndex vectorIndex,
             EmbeddingClient embeddings,
             Reranker reranker,
-            @Qualifier("userMemoryRetrievalExecutor") Executor executor) {
+            @Qualifier("userMemoryRetrievalExecutor") Executor executor,
+            KnowledgeMetrics metrics) {
         this.properties = properties;
         this.keywordIndex = keywordIndex;
         this.vectorIndex = vectorIndex;
         this.embeddings = embeddings;
         this.reranker = reranker;
         this.executor = executor;
+        this.metrics = metrics;
+    }
+
+    UserMemoryRetrievalService(
+            UserMemoryIndexProperties properties,
+            MemoryKeywordIndex keywordIndex,
+            MemoryVectorIndex vectorIndex,
+            EmbeddingClient embeddings,
+            Reranker reranker,
+            Executor executor) {
+        this(properties, keywordIndex, vectorIndex, embeddings, reranker, executor, null);
     }
 
     public MemoryRetrievalResult retrieve(
@@ -80,6 +94,8 @@ public class UserMemoryRetrievalService {
 
         ChannelResult keyword = keywordFuture.join();
         ChannelResult vector = vectorFuture.join();
+        recordChannel("ES", keyword.available);
+        recordChannel("MILVUS", vector.available);
         if (!keyword.available && !vector.available) {
             return result(List.of(), "ALL_RECALL_UNAVAILABLE", "NO_CANDIDATE");
         }
@@ -88,6 +104,7 @@ public class UserMemoryRetrievalService {
         List<FusedMemoryHit> fused = fusion.fuse(
                 vector.hits, keyword.hits, strategy.getRrfTopK(),
                 strategy.getVectorWeight(), strategy.getKeywordWeight());
+        if (metrics != null) metrics.recordUserMemoryCandidates("FUSED", fused.size());
         List<ScoredMemory> scored = rerank(query, fused);
         List<MemoryRecallCandidate> candidates = new ArrayList<>();
         int rank = 0;
@@ -167,9 +184,19 @@ public class UserMemoryRetrievalService {
             List<MemoryRecallCandidate> candidates,
             String degradation,
             String code) {
+        if (metrics != null) {
+            metrics.recordUserMemoryRecall(degradation, code);
+            metrics.recordUserMemoryCandidates("FINAL", candidates.size());
+        }
         return new MemoryRetrievalResult(
                 candidates, properties.getRetrieval().getStrategyVersion(),
                 degradation, code);
+    }
+
+    private void recordChannel(String channel, boolean available) {
+        if (metrics != null) {
+            metrics.recordUserMemoryChannel(channel, available ? "AVAILABLE" : "UNAVAILABLE");
+        }
     }
 
     private record ChannelResult(boolean available, List<MemorySearchHit> hits) {

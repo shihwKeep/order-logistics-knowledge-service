@@ -21,6 +21,15 @@ class ConfigurationContractTest {
         assertThat(localYaml).doesNotMatch(
                 "(?s).*client-secret:\\s*[A-Fa-f0-9]{32,}.*");
         assertThat(baseYaml).contains("port: ${KNOWLEDGE_SERVER_PORT:8084}");
+        assertThat(baseYaml)
+                .containsPattern("(?s)user-memory:\\s+enabled: false")
+                .contains("index-alias: agent-user-memory-active")
+                .contains("collection: agent_user_memory_v1")
+                .contains("es-top-k: 20")
+                .contains("milvus-top-k: 20")
+                .contains("final-top-k: 10")
+                .contains("timeout: 3s")
+                .contains("strategy-version: user-memory-es-milvus-rrf60-bge-v1");
         assertThat(localYaml)
                 .contains("base-url: ${SSPX_BASE_URL:http://127.0.0.1:9092}")
                 .contains("endpoint: ${KNOWLEDGE_MINIO_ENDPOINT:http://127.0.0.1:9000}")

@@ -1,6 +1,7 @@
 package com.xjjk.knowledge.observation;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,15 @@ public class KnowledgeMetrics {
             "KNOWLEDGE_SERVICE_UNAVAILABLE");
     private static final Set<String> INGESTION_STAGES = Set.of("CLAIM", "PARSE", "CHUNK", "INDEX");
     private static final Set<String> INGESTION_OUTCOMES = Set.of("SUCCESS", "FAILED", "UNCLAIMED");
+    private static final Set<String> MEMORY_INDEX_OPERATIONS = Set.of(
+            "UPSERT", "DELETE", "DELETE_EXPLICIT_SCOPE", "CLEAR_GENERATION");
+    private static final Set<String> MEMORY_INDEX_OUTCOMES = Set.of("SUCCESS", "FAILURE");
+    private static final Set<String> MEMORY_CHANNELS = Set.of("ES", "MILVUS");
+    private static final Set<String> MEMORY_CHANNEL_OUTCOMES = Set.of("AVAILABLE", "UNAVAILABLE");
+    private static final Set<String> MEMORY_DEGRADATIONS = Set.of(
+            "NONE", "KEYWORD_ONLY", "VECTOR_ONLY", "ALL_RECALL_UNAVAILABLE", "DISABLED");
+    private static final Set<String> MEMORY_RESULTS = Set.of("OK", "NO_CANDIDATE", "DISABLED");
+    private static final Set<String> MEMORY_CANDIDATE_STAGES = Set.of("FUSED", "FINAL");
 
     private final MeterRegistry registry;
 
@@ -45,6 +55,35 @@ public class KnowledgeMetrics {
 
     public void recordIngestionRejected() {
         registry.counter("knowledge.ingestion.rejected").increment();
+    }
+
+    public void recordUserMemoryIndex(String operation, String outcome) {
+        registry.counter("knowledge.user.memory.index.operation",
+                        "operation", bounded(operation, MEMORY_INDEX_OPERATIONS, "UNKNOWN"),
+                        "outcome", bounded(outcome, MEMORY_INDEX_OUTCOMES, "FAILURE"))
+                .increment();
+    }
+
+    public void recordUserMemoryChannel(String channel, String outcome) {
+        registry.counter("knowledge.user.memory.recall.channel",
+                        "channel", bounded(channel, MEMORY_CHANNELS, "UNKNOWN"),
+                        "outcome", bounded(outcome, MEMORY_CHANNEL_OUTCOMES, "UNAVAILABLE"))
+                .increment();
+    }
+
+    public void recordUserMemoryRecall(String degradation, String result) {
+        registry.counter("knowledge.user.memory.recall",
+                        "degradation", bounded(degradation, MEMORY_DEGRADATIONS, "UNKNOWN"),
+                        "result", bounded(result, MEMORY_RESULTS, "UNKNOWN"))
+                .increment();
+    }
+
+    public void recordUserMemoryCandidates(String stage, int count) {
+        DistributionSummary.builder("knowledge.user.memory.recall.candidates")
+                .description("User memory candidate counts at bounded retrieval stages")
+                .tag("stage", bounded(stage, MEMORY_CANDIDATE_STAGES, "FINAL"))
+                .register(registry)
+                .record(Math.max(0, count));
     }
 
     private String bounded(String value, Set<String> allowed, String fallback) {
