@@ -14,6 +14,7 @@ public class BailianModelProperties {
     private String region = "cn-beijing";
     private String workspaceId;
     private String apiKey;
+    private String baseUrl;
     private String embeddingModel = "qwen3.7-text-embedding";
     private String rerankerModel = "qwen3.7-text-rerank";
     private int embeddingDimension = 2560;
@@ -36,6 +37,11 @@ public class BailianModelProperties {
     }
 
     private URI endpoint(String suffix) {
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            String normalized = baseUrl.endsWith("/")
+                    ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+            return URI.create(normalized + "/api/v1/services/" + suffix);
+        }
         return URI.create("https://" + workspaceId + "." + region
                 + ".maas.aliyuncs.com/api/v1/services/" + suffix);
     }
@@ -72,6 +78,8 @@ public class BailianModelProperties {
     public void setWorkspaceId(String workspaceId) { this.workspaceId = workspaceId; }
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     public String getEmbeddingModel() { return embeddingModel; }
     public void setEmbeddingModel(String embeddingModel) { this.embeddingModel = embeddingModel; }
     public String getRerankerModel() { return rerankerModel; }

@@ -25,14 +25,31 @@ management:
 
 # 灾备恢复开关必须由维护命令显式打开，日常启动不能重复计算全库向量。
 knowledge:
+  cloud-model:
+    enabled: true
+    region: cn-beijing
+    workspace-id: ${KNOWLEDGE_DASHSCOPE_WORKSPACE_ID}
+    api-key: ${KNOWLEDGE_DASHSCOPE_API_KEY}
+    embedding-model: qwen3.7-text-embedding
+    reranker-model: qwen3.7-text-rerank
+    embedding-dimension: 2560
+    embedding-batch-size: 20
+    max-attempts: 3
+    initial-backoff: 200ms
+    connect-timeout: 3s
+    read-timeout: 30s
+    monthly-budget-micros: 200000000
+    hard-limit-micros: 180000000
+    embedding-price-micros-per-million-tokens: 500000
+    reranker-price-micros-per-million-tokens: 500000
   # 用户记忆使用独立 ES/Milvus 命名空间，默认关闭，必须由 Nacos 显式开启。
   user-memory:
     enabled: false
     elasticsearch:
       index-alias: agent-user-memory-active
-      index-name: agent-user-memory-v1
+      index-name: agent-user-memory-v2
     milvus:
-      collection: agent_user_memory_v1
+      collection: agent_user_memory_v2
       dimension: 2560
     retrieval:
       es-top-k: 20
@@ -45,6 +62,6 @@ knowledge:
       rerank-enabled: true
       reranker-score-threshold: 0.50
       timeout: 3s
-      strategy-version: user-memory-es-milvus-rrf60-bge-v1
+      strategy-version: user-memory-es-milvus-rrf60-qwen37-v2
   maintenance:
     rebuild-indexes-on-startup: false

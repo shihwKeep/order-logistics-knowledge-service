@@ -1,6 +1,6 @@
 package com.xjjk.knowledge.config;
 
-import com.xjjk.knowledge.retrieval.rerank.RerankerProperties;
+import com.xjjk.knowledge.cloud.config.BailianModelProperties;
 import com.xjjk.knowledge.retrieval.service.RetrievalProperties;
 import org.junit.jupiter.api.Test;
 
@@ -24,12 +24,13 @@ class ConfigurationContractTest {
         assertThat(baseYaml)
                 .containsPattern("(?s)user-memory:\\s+enabled: false")
                 .contains("index-alias: agent-user-memory-active")
-                .contains("collection: agent_user_memory_v1")
+                .contains("index-name: agent-user-memory-v2")
+                .contains("collection: agent_user_memory_v2")
                 .contains("es-top-k: 20")
                 .contains("milvus-top-k: 20")
                 .contains("final-top-k: 10")
                 .contains("timeout: 3s")
-                .contains("strategy-version: user-memory-es-milvus-rrf60-bge-v1");
+                .contains("strategy-version: user-memory-es-milvus-rrf60-qwen37-v2");
         assertThat(localYaml)
                 .contains("base-url: ${SSPX_BASE_URL:http://127.0.0.1:9092}")
                 .contains("endpoint: ${KNOWLEDGE_MINIO_ENDPOINT:http://127.0.0.1:9000}")
@@ -55,18 +56,26 @@ class ConfigurationContractTest {
     @Test
     void localRetrievalLimitsCpuRerankingAndAllowsMeasuredInferenceTime() throws Exception {
         String localYaml = Files.readString(Path.of("src/main/resources/application-local.yml"));
+        String baseYaml = Files.readString(Path.of("src/main/resources/application.yml"));
 
+        assertThat(baseYaml)
+                .contains("workspace-id: ${KNOWLEDGE_DASHSCOPE_WORKSPACE_ID}")
+                .contains("api-key: ${KNOWLEDGE_DASHSCOPE_API_KEY}")
+                .contains("hard-limit-micros: 180000000");
         assertThat(localYaml)
                 .contains("fusion-top-k: 10")
-                .containsPattern("(?s)reranker:.*?read-timeout: 12s")
-                .contains("version: qwen3-es-milvus-rrf60-bge-v2")
+                .contains("draft-index: knowledge_chunks_draft_v2")
+                .contains("published-index: knowledge_chunks_published_v2")
+                .contains("version: qwen37-es-milvus-rrf60-rerank-v3")
+                .doesNotContain("11434")
+                .doesNotContain("127.0.0.1:8000")
                 .doesNotContain("strict-rrf-threshold");
     }
 
     @Test
     void retrievalPropertyDefaultsMatchLocalCpuBudget() {
         assertThat(new RetrievalProperties().getFusionTopK()).isEqualTo(10);
-        assertThat(new RetrievalProperties().getVersion()).isEqualTo("qwen3-es-milvus-rrf60-bge-v2");
-        assertThat(new RerankerProperties().getReadTimeout()).isEqualTo(java.time.Duration.ofSeconds(12));
+        assertThat(new RetrievalProperties().getVersion()).isEqualTo("qwen37-es-milvus-rrf60-rerank-v3");
+        assertThat(new BailianModelProperties().getReadTimeout()).isEqualTo(java.time.Duration.ofSeconds(30));
     }
 }

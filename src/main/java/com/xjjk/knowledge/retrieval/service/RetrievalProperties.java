@@ -12,7 +12,7 @@ public class RetrievalProperties {
     private int finalTopK = 5;
     private double vectorWeight = 1D;
     private double keywordWeight = 1D;
-    private String version = "qwen3-es-milvus-rrf60-bge-v2";
+    private String version = "qwen37-es-milvus-rrf60-rerank-v3";
 
     @PostConstruct
     void validate() {

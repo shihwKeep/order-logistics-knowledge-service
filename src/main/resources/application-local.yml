@@ -72,19 +72,16 @@ knowledge:
       allowed-clock-skew: 5m
       nonce-ttl: 10m
     embedding:
-      base-url: ${KNOWLEDGE_OLLAMA_BASE_URL:http://127.0.0.1:11434}
-      model: ${KNOWLEDGE_EMBEDDING_MODEL:qwen3-embedding:4b-q4_K_M}
+      model: qwen3.7-text-embedding
       dimension: 2560
-      batch-size: 8
-      connect-timeout: 2s
-      read-timeout: 45s
-      instruction-version: qwen3-customer-service-v1
+      batch-size: 20
+      instruction-version: qwen37-customer-service-v2
     elasticsearch:
       base-url: ${KNOWLEDGE_ELASTICSEARCH_BASE_URL:http://127.0.0.1:9200}
       username: ${KNOWLEDGE_ELASTICSEARCH_USERNAME:}
       password: ${KNOWLEDGE_ELASTICSEARCH_PASSWORD:}
-      draft-index: knowledge_chunks_draft_v1
-      published-index: knowledge_chunks_published_v1
+      draft-index: knowledge_chunks_draft_v2
+      published-index: knowledge_chunks_published_v2
       connect-timeout: 2s
       read-timeout: 5s
       verification-limit: 10000
@@ -93,26 +90,23 @@ knowledge:
       uri: ${KNOWLEDGE_MILVUS_URI:http://127.0.0.1:19530}
       database-name: ${KNOWLEDGE_MILVUS_DATABASE:default}
       token: ${KNOWLEDGE_MILVUS_TOKEN:}
-      draft-collection: knowledge_chunks_draft_v1
-      published-collection: knowledge_chunks_published_v1
+      draft-collection: knowledge_chunks_draft_v2
+      published-collection: knowledge_chunks_published_v2
       dimension: 2560
       connect-timeout: 5s
       request-timeout: 10s
       verification-limit: 10000
     reranker:
       enabled: ${KNOWLEDGE_RERANKER_ENABLED:true}
-      base-url: ${KNOWLEDGE_RERANKER_BASE_URL:http://127.0.0.1:8000}
       top-k: 5
       score-threshold: 0.15
-      connect-timeout: 2s
-      read-timeout: 12s
     strategy:
       recall-top-k: 30
       fusion-top-k: 10
       final-top-k: 5
       vector-weight: 1.0
       keyword-weight: 1.0
-      version: qwen3-es-milvus-rrf60-bge-v2
+      version: qwen37-es-milvus-rrf60-rerank-v3
     publication-cleanup:
       enabled: true
       batch-size: 20

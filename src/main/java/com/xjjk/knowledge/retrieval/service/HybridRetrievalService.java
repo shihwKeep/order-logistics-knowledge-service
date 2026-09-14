@@ -2,6 +2,7 @@ package com.xjjk.knowledge.retrieval.service;
 
 import com.xjjk.knowledge.common.api.ApiErrorCode;
 import com.xjjk.knowledge.common.error.BusinessException;
+import com.xjjk.knowledge.cloud.budget.CloudModelBudgetExceededException;
 import com.xjjk.knowledge.retrieval.embedding.EmbeddingClient;
 import com.xjjk.knowledge.retrieval.fusion.RrfFusion;
 import com.xjjk.knowledge.retrieval.index.KeywordIndex;
@@ -93,6 +94,8 @@ public class HybridRetrievalService {
             List<Float> queryVector = embeddings.embedQuery(question);
             vectorCandidates = vectorIndex.search(
                     layer, tenantId, knowledgeBaseIds, queryVector, properties.getRecallTopK());
+        } catch (CloudModelBudgetExceededException exception) {
+            throw new BusinessException(ApiErrorCode.KNOWLEDGE_MODEL_BUDGET_EXHAUSTED, exception);
         } catch (RuntimeException exception) {
             vectorAvailable = false;
             log.warn("knowledge_vector_recall_unavailable requestId={}, exceptionType={}",
@@ -130,6 +133,8 @@ public class HybridRetrievalService {
             selected = fused.isEmpty() ? List.of() : reranker.rerank(question, fused).stream()
                     .filter(candidate -> candidate.score() >= rerankerProperties.getScoreThreshold())
                     .toList();
+        } catch (CloudModelBudgetExceededException exception) {
+            throw new BusinessException(ApiErrorCode.KNOWLEDGE_MODEL_BUDGET_EXHAUSTED, exception);
         } catch (RerankerUnavailableException exception) {
             // RRF 只能说明候选在两路召回中的排名，不能证明正文足以回答问题。
             // 精排不可用时必须保守拒答，避免把仅有词面相似性的内容交给大模型。

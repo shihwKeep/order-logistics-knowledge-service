@@ -1,6 +1,7 @@
 package com.xjjk.knowledge.retrieval.service;
 
 import com.xjjk.knowledge.common.error.BusinessException;
+import com.xjjk.knowledge.cloud.budget.CloudModelBudgetExceededException;
 import com.xjjk.knowledge.retrieval.embedding.EmbeddingClient;
 import com.xjjk.knowledge.retrieval.embedding.EmbeddingUnavailableException;
 import com.xjjk.knowledge.retrieval.fusion.RrfFusion;
@@ -150,6 +151,19 @@ class HybridRetrievalServiceTest {
     }
 
     @Test
+    void budgetExhaustionIsNotHiddenAsKeywordOnlyDegradation() {
+        Fixture fixture = new Fixture();
+        fixture.budgetExhausted = true;
+        fixture.keyword.result = List.of(candidate("keyword", RecallSource.KEYWORD));
+
+        assertThatThrownBy(() -> fixture.service().retrieve(
+                1L, 10567L, "request-budget", "问题", List.of()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode().code())
+                                .isEqualTo("KNOWLEDGE_MODEL_BUDGET_EXHAUSTED"));
+    }
+
+    @Test
     void stalePublishedCandidatesCannotMakeTheAnswerAnswerable() {
         Fixture fixture = new Fixture();
         fixture.vector.result = List.of(candidate("stale", RecallSource.VECTOR));
@@ -194,6 +208,7 @@ class HybridRetrievalServiceTest {
         private final DraftVersionValidator draftValidator = mock(DraftVersionValidator.class);
         private final SearchLogRecorder searchLogs = mock(SearchLogRecorder.class);
         private boolean embeddingFailure;
+        private boolean budgetExhausted;
         private Reranker reranker = (query, values) -> values;
 
         private Fixture() {
@@ -205,6 +220,7 @@ class HybridRetrievalServiceTest {
             EmbeddingClient embeddings = new EmbeddingClient() {
                 @Override public List<List<Float>> embedDocuments(List<String> documents) { throw new UnsupportedOperationException(); }
                 @Override public List<Float> embedQuery(String query) {
+                    if (budgetExhausted) throw new CloudModelBudgetExceededException();
                     if (embeddingFailure) throw new EmbeddingUnavailableException("down");
                     return List.of(1F);
                 }
