@@ -3,6 +3,7 @@ package com.xjjk.knowledge.retrieval.indexing;
 import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.persistence.DocumentVersionEntity;
+import com.xjjk.knowledge.retrieval.embedding.EmbeddingProperties;
 import com.xjjk.knowledge.retrieval.model.IndexLayer;
 import org.springframework.stereotype.Repository;
 
@@ -12,9 +13,12 @@ import java.util.List;
 @Repository
 class MybatisIndexRecoveryRepository implements IndexRecoveryRepository {
     private final IndexRecoveryMapper mapper;
+    private final EmbeddingProperties embeddingProperties;
 
-    MybatisIndexRecoveryRepository(IndexRecoveryMapper mapper) {
+    MybatisIndexRecoveryRepository(
+            IndexRecoveryMapper mapper, EmbeddingProperties embeddingProperties) {
         this.mapper = mapper;
+        this.embeddingProperties = embeddingProperties;
     }
 
     @Override
@@ -29,6 +33,16 @@ class MybatisIndexRecoveryRepository implements IndexRecoveryRepository {
                 .map(version -> new IndexRecoveryTarget(IndexLayer.DRAFT, version))
                 .forEach(targets::add);
         return List.copyOf(targets);
+    }
+
+    @Override
+    public boolean upgradeEmbeddingContract(DocumentVersion expectedVersion) {
+        return mapper.upgradeEmbeddingContract(
+                expectedVersion.id(), expectedVersion.tenantId(), expectedVersion.documentId(),
+                expectedVersion.indexManifestSha256(), expectedVersion.embeddingModel(),
+                expectedVersion.embeddingDimension(), expectedVersion.embeddingInstructionVersion(),
+                embeddingProperties.getModel(), embeddingProperties.getDimension(),
+                embeddingProperties.getInstructionVersion()) == 1;
     }
 
     private DocumentVersion toDomain(DocumentVersionEntity entity) {

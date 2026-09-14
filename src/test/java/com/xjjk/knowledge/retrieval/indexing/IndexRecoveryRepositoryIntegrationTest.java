@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import com.xjjk.knowledge.retrieval.embedding.EmbeddingProperties;
 
 import java.sql.Statement;
 
@@ -66,12 +67,30 @@ class IndexRecoveryRepositoryIntegrationTest {
                         """);
             }
 
+            EmbeddingProperties embedding = new EmbeddingProperties();
+            embedding.setModel("qwen3.7-text-embedding");
+            embedding.setDimension(2560);
+            embedding.setInstructionVersion("qwen37-customer-service-v2");
             MybatisIndexRecoveryRepository repository = new MybatisIndexRecoveryRepository(
-                    session.getMapper(IndexRecoveryMapper.class));
+                    session.getMapper(IndexRecoveryMapper.class), embedding);
 
-            assertThat(repository.listCurrentTargets())
+            var targets = repository.listCurrentTargets();
+            assertThat(targets)
                     .extracting(target -> target.layer().name() + ":" + target.version().id())
                     .containsExactly("PUBLISHED:4", "DRAFT:5");
+
+            assertThat(repository.upgradeEmbeddingContract(targets.getFirst().version())).isTrue();
+            assertThat(repository.upgradeEmbeddingContract(targets.getFirst().version())).isFalse();
+            try (var statement = session.getConnection().prepareStatement("""
+                    SELECT embedding_model, embedding_dimension, embedding_instruction_version
+                      FROM kb_document_version WHERE id=4
+                    """); var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("embedding_model")).isEqualTo("qwen3.7-text-embedding");
+                assertThat(result.getInt("embedding_dimension")).isEqualTo(2560);
+                assertThat(result.getString("embedding_instruction_version"))
+                        .isEqualTo("qwen37-customer-service-v2");
+            }
         }
     }
 }

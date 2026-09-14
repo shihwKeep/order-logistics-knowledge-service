@@ -35,16 +35,28 @@ public class PublicationIndexService {
     }
 
     public void preparePublished(DocumentVersion version) {
-        prepare(version, IndexLayer.PUBLISHED);
+        prepare(version, IndexLayer.PUBLISHED, true);
     }
 
     /** 灾备恢复时依据 MySQL Chunk 重建当前草稿层，不改变草稿状态。 */
     public void prepareDraft(DocumentVersion version) {
-        prepare(version, IndexLayer.DRAFT);
+        prepare(version, IndexLayer.DRAFT, true);
     }
 
-    private void prepare(DocumentVersion version, IndexLayer layer) {
-        validateEmbeddingContract(version);
+    /** 维护迁移专用：使用当前模型重建，旧契约仅在所有外部索引校验通过后更新。 */
+    public void recoverPublished(DocumentVersion version) {
+        prepare(version, IndexLayer.PUBLISHED, false);
+    }
+
+    /** 维护迁移专用：使用当前模型重建，旧契约仅在所有外部索引校验通过后更新。 */
+    public void recoverDraft(DocumentVersion version) {
+        prepare(version, IndexLayer.DRAFT, false);
+    }
+
+    private void prepare(DocumentVersion version, IndexLayer layer, boolean requireCurrentContract) {
+        if (requireCurrentContract) {
+            validateEmbeddingContract(version);
+        }
         List<IndexChunk> values = chunks.loadVersionChunks(version);
         if (values.isEmpty() || values.size() != version.chunkCount()) {
             throw new IllegalStateException("待恢复版本的 MySQL Chunk 数量不一致");
