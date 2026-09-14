@@ -43,7 +43,8 @@ class BailianEmbeddingClientTest {
                     .contains("\"texts\":[\"退款规则\",\"物流规范\"]")
                     .contains("\"text_type\":\"document\"")
                     .contains("\"dimension\":4")
-                    .contains("\"output_type\":\"dense\"");
+                    .contains("\"output_type\":\"dense\"")
+                    .doesNotContain("\"instruct\"");
         } finally {
             server.stop(0);
         }

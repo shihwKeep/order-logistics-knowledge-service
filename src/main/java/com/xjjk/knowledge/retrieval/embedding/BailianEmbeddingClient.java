@@ -1,6 +1,7 @@
 package com.xjjk.knowledge.retrieval.embedding;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xjjk.knowledge.cloud.budget.CloudModelCallType;
@@ -141,6 +142,7 @@ public class BailianEmbeddingClient implements EmbeddingClient {
 
     private record EmbedRequest(String model, EmbedInput input, EmbedParameters parameters) {}
     private record EmbedInput(List<String> texts) {}
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private record EmbedParameters(@JsonProperty("text_type") String textType,
                                    int dimension,
                                    @JsonProperty("output_type") String outputType,
