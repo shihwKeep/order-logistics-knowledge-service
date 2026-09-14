@@ -6,9 +6,11 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 /** 仅在维护命令显式开启时执行；日常启动默认不会全量重算向量。 */
 @Component
+@Order(1)
 @ConditionalOnProperty(
         prefix = "knowledge.maintenance",
         name = "rebuild-indexes-on-startup",

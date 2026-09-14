@@ -64,4 +64,6 @@ knowledge:
       timeout: 3s
       strategy-version: user-memory-es-milvus-rrf60-qwen37-v2
   maintenance:
+    reset-derived-indexes-on-startup: false
+    reset-confirmation: ""
     rebuild-indexes-on-startup: false
