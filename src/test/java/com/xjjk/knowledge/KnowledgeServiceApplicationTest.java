@@ -1,6 +1,7 @@
 package com.xjjk.knowledge;
 
 import com.xjjk.knowledge.audit.AuditMapper;
+import com.xjjk.knowledge.cloud.budget.CloudModelBudgetMapper;
 import com.xjjk.knowledge.audit.AuditQueryMapper;
 import com.xjjk.knowledge.document.persistence.DocumentMapper;
 import com.xjjk.knowledge.document.service.DocumentManagementMapper;
@@ -34,7 +35,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
         "knowledge.admin-session.absolute-timeout=8h",
         "knowledge.admin-session.role-cache-ttl=5m",
         "knowledge.admin-session.touch-interval=1m",
-        "knowledge.admin-session.secure-cookie=false"
+        "knowledge.admin-session.secure-cookie=false",
+        "knowledge.cloud-model.workspace-id=test-workspace",
+        "knowledge.cloud-model.api-key=test-key"
 })
 class KnowledgeServiceApplicationTest {
 
@@ -79,6 +82,9 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private StringRedisTemplate redisTemplate;
+
+    @MockitoBean
+    private CloudModelBudgetMapper cloudModelBudgetMapper;
 
     @Test
     void contextLoads() {

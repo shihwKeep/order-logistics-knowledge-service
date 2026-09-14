@@ -5,6 +5,7 @@ import com.xjjk.knowledge.cloud.budget.CloudModelBudgetService;
 import com.xjjk.knowledge.cloud.budget.CloudModelCallType;
 import com.xjjk.knowledge.cloud.config.BailianModelProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -16,6 +17,7 @@ public class BailianCallExecutor {
     private final BailianModelProperties properties;
     private final Sleeper sleeper;
 
+    @Autowired
     public BailianCallExecutor(CloudModelBudgetService budget, BailianModelProperties properties) {
         this(budget, properties, duration -> Thread.sleep(duration.toMillis()));
     }

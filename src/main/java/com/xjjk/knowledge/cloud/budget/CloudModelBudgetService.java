@@ -2,6 +2,7 @@ package com.xjjk.knowledge.cloud.budget;
 
 import com.xjjk.knowledge.cloud.config.BailianModelProperties;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -22,6 +23,7 @@ public class CloudModelBudgetService {
     private final CloudModelCostEstimator estimator;
     private final Clock clock;
 
+    @Autowired
     public CloudModelBudgetService(CloudModelBudgetMapper mapper,
                                    BailianModelProperties properties,
                                    CloudModelCostEstimator estimator) {

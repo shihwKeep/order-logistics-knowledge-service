@@ -30,7 +30,7 @@ class PublicationCleanupMigrationTest {
             DatabaseMetaData metadata = connection.getMetaData();
             assertThat(tableNames(metadata)).contains("kb_published_index_cleanup");
         }
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
     }
 
     private Set<String> tableNames(DatabaseMetaData metadata) throws Exception {
