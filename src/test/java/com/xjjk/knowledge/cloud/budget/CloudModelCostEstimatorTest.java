@@ -16,9 +16,9 @@ class CloudModelCostEstimatorTest {
     }
 
     @Test
-    void rerankCountsQueryOncePerDocument() {
+    void rerankCountsQueryOncePerDocumentAndProviderRequestFrame() {
         assertThat(estimator.rerankMaximumCharge("问", List.of("甲", "乙"), "指令", 500_000L))
-                .isEqualTo(9L);
+                .isEqualTo(10L);
     }
 
     @Test

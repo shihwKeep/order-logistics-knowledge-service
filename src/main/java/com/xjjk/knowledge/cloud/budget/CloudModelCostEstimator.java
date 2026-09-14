@@ -7,6 +7,9 @@ import java.util.List;
 
 @Component
 public class CloudModelCostEstimator {
+    /** 百炼 Rerank usage 会额外计入一个请求级框架 Token。 */
+    private static final long RERANK_REQUEST_FRAME_TOKENS = 1L;
+
     public long embeddingMaximumCharge(List<String> texts, String instruction,
                                        long priceMicrosPerMillionTokens) {
         if (texts == null || texts.isEmpty()) throw new IllegalArgumentException("向量文本不能为空");
@@ -26,6 +29,7 @@ public class CloudModelCostEstimator {
         long bytes = Math.multiplyExact(utf8Bytes(query), documents.size());
         for (String document : documents) bytes = Math.addExact(bytes, utf8Bytes(document));
         if (instruction != null && !instruction.isBlank()) bytes = Math.addExact(bytes, utf8Bytes(instruction));
+        bytes = Math.addExact(bytes, RERANK_REQUEST_FRAME_TOKENS);
         return charge(bytes, priceMicrosPerMillionTokens);
     }
 
