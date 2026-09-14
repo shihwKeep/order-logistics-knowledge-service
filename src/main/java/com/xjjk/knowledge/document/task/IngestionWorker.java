@@ -1,6 +1,7 @@
 package com.xjjk.knowledge.document.task;
 
 import com.xjjk.knowledge.common.error.BusinessException;
+import com.xjjk.knowledge.cloud.budget.CloudModelBudgetExceededException;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.parser.DocumentParser;
 import com.xjjk.knowledge.document.parser.DocumentParserRegistry;
@@ -128,6 +129,12 @@ public class IngestionWorker {
         } catch (IngestionLeaseLostException exception) {
             // 租约已转移给其他 Worker，旧 Worker 不能覆盖版本失败状态或新任务结果。
             tasks.complete(lease.taskId(), lease.leaseToken());
+            return false;
+        } catch (CloudModelBudgetExceededException exception) {
+            // 月度额度会自动恢复；保留既有 Chunk 和版本状态，不消耗有限的普通重试次数。
+            tasks.defer(
+                    lease.taskId(), lease.leaseToken(), "KNOWLEDGE_MODEL_BUDGET_EXHAUSTED",
+                    exception.getMessage(), properties.getBudgetRetryDelay());
             return false;
         } catch (Exception exception) {
             String code = exception instanceof BusinessException business

@@ -114,7 +114,7 @@ class DocumentControllerTest {
                 uploaded.versionNumber(), DocumentStatus.READY, uploaded.originalFilename(),
                 uploaded.fileExtension(), uploaded.mimeType(), uploaded.fileSize(), uploaded.sourceSha256(),
                 uploaded.sourceObjectKey(), uploaded.parsedObjectKey(), uploaded.parserVersion(), uploaded.chunkStrategyVersion(),
-                "qwen3-embedding:4b-q4_K_M", 2560, "qwen3-customer-service-v1", "manifest",
+                "qwen3.7-text-embedding", 2560, "qwen37-customer-service-v2", "manifest",
                 LocalDateTime.of(2026, 9, 10, 16, 24), false, 0, 34, 34,
                 null, null, null, uploaded.createdBy(), uploaded.createdAt(), uploaded.updatedAt());
         when(queries.list(any(AdminPrincipal.class), eq(1L), eq(10L)))

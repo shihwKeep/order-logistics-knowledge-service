@@ -51,6 +51,12 @@ public class MybatisIngestionTaskRepository implements IngestionTaskRepository {
     }
 
     @Override
+    public boolean defer(long taskId, String leaseToken, String errorCode, String message, Duration delay) {
+        String safeMessage = message == null ? null : message.substring(0, Math.min(message.length(), 500));
+        return mapper.defer(taskId, leaseToken, LocalDateTime.now().plus(delay), errorCode, safeMessage) == 1;
+    }
+
+    @Override
     public boolean fail(long taskId, String leaseToken, String errorCode, String message, int maxRetries, Duration baseDelay) {
         IngestionTask task = mapper.find(taskId);
         if (task == null || !leaseToken.equals(task.leaseToken())) {

@@ -28,8 +28,8 @@ class BailianEmbeddingClientTest {
         AtomicReference<String> authorization = new AtomicReference<>();
         HttpServer server = server(body, authorization,
                 "{\"output\":{\"embeddings\":["
-                        + "{\"embedding\":[0.1,0.2,0.3,0.4],\"index\":1},"
-                        + "{\"embedding\":[0.5,0.6,0.7,0.8],\"index\":0}]},"
+                        + "{\"embedding\":[0.1,0.2,0.3,0.4],\"text_index\":1},"
+                        + "{\"embedding\":[0.5,0.6,0.7,0.8],\"text_index\":0}]},"
                         + "\"usage\":{\"total_tokens\":12},\"request_id\":\"provider-1\"}");
         try {
             BailianEmbeddingClient client = client(server);
@@ -53,7 +53,7 @@ class BailianEmbeddingClientTest {
     void sendsQueryRoleAndInstruction() throws Exception {
         AtomicReference<String> body = new AtomicReference<>();
         HttpServer server = server(body, new AtomicReference<>(),
-                "{\"output\":{\"embeddings\":[{\"embedding\":[0.1,0.2,0.3,0.4],\"index\":0}]},"
+                "{\"output\":{\"embeddings\":[{\"embedding\":[0.1,0.2,0.3,0.4],\"text_index\":0}]},"
                         + "\"usage\":{\"total_tokens\":8},\"request_id\":\"provider-2\"}");
         try {
             assertThat(client(server).embedQuery("怎么退款")).hasSize(4);

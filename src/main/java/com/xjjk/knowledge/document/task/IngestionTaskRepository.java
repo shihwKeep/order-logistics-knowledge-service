@@ -10,5 +10,6 @@ public interface IngestionTaskRepository {
     List<Long> findDueTaskIds(int limit);
     boolean renew(long taskId, String leaseToken, Duration leaseDuration);
     boolean complete(long taskId, String leaseToken);
+    boolean defer(long taskId, String leaseToken, String errorCode, String message, Duration delay);
     boolean fail(long taskId, String leaseToken, String errorCode, String message, int maxRetries, Duration baseDelay);
 }

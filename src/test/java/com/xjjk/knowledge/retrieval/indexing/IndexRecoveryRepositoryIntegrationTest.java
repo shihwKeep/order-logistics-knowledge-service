@@ -49,13 +49,13 @@ class IndexRecoveryRepositoryIntegrationTest {
                           unit_count,chunk_count,created_by)
                         VALUES
                           (4,1,2,3,1,'PUBLISHED','v1.txt','txt','text/plain',10,REPEAT('a',64),
-                           'source/4','text-v1','structural-v1','qwen3-embedding:4b-q4_K_M',2560,
+                           'source/4','text-v1','structural-v1','qwen3.7-text-embedding',2560,
                            'qwen3-customer-service-v1',REPEAT('b',64),1,1,10567),
                           (5,1,2,3,2,'READY','v2.txt','txt','text/plain',10,REPEAT('c',64),
-                           'source/5','text-v1','structural-v1','qwen3-embedding:4b-q4_K_M',2560,
+                           'source/5','text-v1','structural-v1','qwen3.7-text-embedding',2560,
                            'qwen3-customer-service-v1',REPEAT('d',64),1,1,10567),
                           (6,1,2,3,3,'READY','old.txt','txt','text/plain',10,REPEAT('e',64),
-                           'source/6','text-v1','structural-v1','qwen3-embedding:4b-q4_K_M',2560,
+                           'source/6','text-v1','structural-v1','qwen3.7-text-embedding',2560,
                            'qwen3-customer-service-v1',REPEAT('f',64),1,1,10567)
                         """);
                 statement.executeUpdate("""

@@ -12,6 +12,8 @@ public class IngestionProperties {
     private String workerId = "knowledge-local";
     private Duration leaseDuration = Duration.ofSeconds(60);
     private Duration retryBaseDelay = Duration.ofSeconds(10);
+    /** 月度模型额度耗尽时保持任务可重试，且不消耗普通故障重试次数。 */
+    private Duration budgetRetryDelay = Duration.ofHours(1);
     private int maxRetries = 5;
     private int scanBatchSize = 20;
     /** 后台入库的进程内并发上限，避免 OCR/Embedding 抢占在线检索资源。 */
@@ -29,6 +31,8 @@ public class IngestionProperties {
     public void setLeaseDuration(Duration leaseDuration) { this.leaseDuration = leaseDuration; }
     public Duration getRetryBaseDelay() { return retryBaseDelay; }
     public void setRetryBaseDelay(Duration retryBaseDelay) { this.retryBaseDelay = retryBaseDelay; }
+    public Duration getBudgetRetryDelay() { return budgetRetryDelay; }
+    public void setBudgetRetryDelay(Duration budgetRetryDelay) { this.budgetRetryDelay = budgetRetryDelay; }
     public int getMaxRetries() { return maxRetries; }
     public void setMaxRetries(int maxRetries) { this.maxRetries = maxRetries; }
     public int getScanBatchSize() { return scanBatchSize; }

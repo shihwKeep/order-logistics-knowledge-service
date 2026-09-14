@@ -30,7 +30,7 @@ class DraftIndexingServiceTest {
         FakeKeywordIndex keyword = new FakeKeywordIndex();
         FakeVectorIndex vector = new FakeVectorIndex();
         EmbeddingProperties properties = new EmbeddingProperties();
-        properties.setModel("qwen3-embedding:4b-q4_K_M");
+        properties.setModel("qwen3.7-text-embedding");
         properties.setDimension(4);
         properties.setInstructionVersion("instruction-v1");
         EmbeddingClient embeddings = new EmbeddingClient() {
@@ -49,7 +49,7 @@ class DraftIndexingServiceTest {
         assertThat(vector.layer).isEqualTo(IndexLayer.DRAFT);
         assertThat(vector.vectors).hasSize(2);
         assertThat(repository.ready).isNotNull();
-        assertThat(repository.ready.model()).isEqualTo("qwen3-embedding:4b-q4_K_M");
+        assertThat(repository.ready.model()).isEqualTo("qwen3.7-text-embedding");
         assertThat(repository.ready.dimension()).isEqualTo(4);
         assertThat(repository.ready.instructionVersion()).isEqualTo("instruction-v1");
         assertThat(repository.ready.manifestSha256()).hasSize(64);

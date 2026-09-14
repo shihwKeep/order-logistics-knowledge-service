@@ -25,6 +25,9 @@ management:
 
 # 灾备恢复开关必须由维护命令显式打开，日常启动不能重复计算全库向量。
 knowledge:
+  document:
+    ingestion:
+      budget-retry-delay: 1h
   cloud-model:
     enabled: true
     region: cn-beijing

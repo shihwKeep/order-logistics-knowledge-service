@@ -37,7 +37,7 @@ class IndexRecoveryServiceTest {
         LocalDateTime now = LocalDateTime.now();
         return new DocumentVersion(
                 id, 1L, 2L, 3L, 1, status, "refund.txt", "txt", "text/plain", 10L,
-                "source", "key", null, "text-v1", "structural-v1", "qwen3-embedding:4b-q4_K_M",
+                "source", "key", null, "text-v1", "structural-v1", "qwen3.7-text-embedding",
                 2560, "query-document-v1", "manifest", now, false, 0, 1, 1,
                 null, null, null, 10567L, now, now);
     }

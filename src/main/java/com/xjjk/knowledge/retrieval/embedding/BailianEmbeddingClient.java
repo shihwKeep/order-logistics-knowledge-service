@@ -149,7 +149,8 @@ public class BailianEmbeddingClient implements EmbeddingClient {
     private record EmbedResponse(Output output, Usage usage,
                                  @JsonProperty("request_id") String requestId) {}
     private record Output(List<EmbeddingItem> embeddings) {}
-    private record EmbeddingItem(List<Float> embedding, int index) {}
+    private record EmbeddingItem(List<Float> embedding,
+                                 @JsonProperty("text_index") int index) {}
     private record Usage(@JsonProperty("total_tokens") long totalTokens) {}
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ErrorResponse(String code) {}

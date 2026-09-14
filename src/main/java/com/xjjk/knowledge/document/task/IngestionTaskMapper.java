@@ -72,6 +72,21 @@ public interface IngestionTaskMapper {
 
     @Update("""
             UPDATE kb_ingestion_task
+               SET status='RETRY', next_run_at=#{nextRunAt},
+                   lease_token=NULL, locked_by=NULL, locked_until=NULL,
+                   last_error_code=#{errorCode}, last_error_message=#{errorMessage},
+                   updated_at=CURRENT_TIMESTAMP(3)
+             WHERE id=#{taskId} AND status='PROCESSING' AND lease_token=#{leaseToken}
+            """)
+    int defer(
+            @Param("taskId") long taskId,
+            @Param("leaseToken") String leaseToken,
+            @Param("nextRunAt") LocalDateTime nextRunAt,
+            @Param("errorCode") String errorCode,
+            @Param("errorMessage") String errorMessage);
+
+    @Update("""
+            UPDATE kb_ingestion_task
                SET status=#{status}, retry_count=retry_count+1, next_run_at=#{nextRunAt},
                    lease_token=NULL, locked_by=NULL, locked_until=NULL,
                    last_error_code=#{errorCode}, last_error_message=#{errorMessage},

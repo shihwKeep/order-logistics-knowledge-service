@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 
 import com.xjjk.knowledge.document.domain.DocumentStatus;
+import com.xjjk.knowledge.cloud.budget.CloudModelBudgetExceededException;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.parser.DocumentParser;
 import com.xjjk.knowledge.document.parser.DocumentParserRegistry;
@@ -211,6 +212,35 @@ class IngestionWorkerTest {
                 "refund.txt", "txt", "text/plain", 12L, "sha", "source-key",
                 null, null, null, null, null, null, null, null, false, 0, 0, 0,
                 null, null, null, 10567L, now, now);
+    }
+
+    @Test
+    void budgetExhaustionKeepsIndexTaskRetryableWithoutConsumingRetryLimitOrFailingVersion() {
+        IngestionTaskRepository tasks = mock(IngestionTaskRepository.class);
+        DocumentRepository documents = mock(DocumentRepository.class);
+        IngestionArtifactRepository artifacts = mock(IngestionArtifactRepository.class);
+        DraftIndexingService indexing = mock(DraftIndexingService.class);
+        IngestionProperties properties = new IngestionProperties();
+        IngestionTaskLease lease = new IngestionTaskLease(81L, 1L, 2L, 3L, 4L, "INDEX", "lease-81");
+        when(tasks.claim(81L, properties.getWorkerId(), properties.getLeaseDuration()))
+                .thenReturn(Optional.of(lease));
+        when(tasks.renew(81L, "lease-81", properties.getLeaseDuration())).thenReturn(true);
+        when(documents.findVersion(1L, 3L, 4L)).thenReturn(Optional.of(version()));
+        when(artifacts.prepareIndexAttempt(any(), org.mockito.ArgumentMatchers.eq(lease))).thenReturn(true);
+        doThrow(new CloudModelBudgetExceededException())
+                .when(indexing).index(any(), any(), anyLong(), any());
+        IngestionWorker worker = new IngestionWorker(
+                tasks, documents, mock(SourceObjectStore.class), mock(DocumentParserRegistry.class), artifacts,
+                new StructuralChunker(new ChunkingProperties(), String::length), indexing, properties,
+                new IngestionBulkhead(properties), metrics());
+
+        assertThat(worker.process(81L)).isFalse();
+
+        verify(tasks).defer(
+                81L, "lease-81", "KNOWLEDGE_MODEL_BUDGET_EXHAUSTED",
+                "知识检索模型本月硬额度已用尽", properties.getBudgetRetryDelay());
+        verify(tasks, never()).fail(anyLong(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+        verify(artifacts, never()).markFailedIfOwned(any(), any(), any(), any());
     }
 
     private static KnowledgeMetrics metrics() {
