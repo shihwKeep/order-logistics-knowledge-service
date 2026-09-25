@@ -45,4 +45,25 @@ class StructuralChunkerTest {
         assertThat(chunks).hasSizeGreaterThan(1);
         assertThat(chunks).allSatisfy(chunk -> assertThat(chunk.text()).contains("商品编码 | 库存"));
     }
+
+    @Test
+    void propagatesPdfTitlePathAndPageLocation() {
+        ChunkingProperties properties = new ChunkingProperties();
+        properties.setTargetTokens(200);
+        properties.setMaxTokens(300);
+        properties.setOverlapTokens(0);
+        StructuralChunker chunker = new StructuralChunker(properties, text -> text.length());
+        ParsedUnit unit = new ParsedUnit(
+                "PDF_SECTION", 1, "第 8 页", "退款规范 > 5 优惠处理",
+                "部分退款后不满足满减门槛时回收优惠。", null, false,
+                "退款规范 第8页 部分退款后不满足满减门槛时回收优惠。");
+
+        List<DocumentChunk> chunks = chunker.chunk(1L, 5L, 7L, List.of(unit));
+
+        assertThat(chunks).singleElement().satisfies(chunk -> {
+            assertThat(chunk.titlePath()).isEqualTo("退款规范 > 5 优惠处理");
+            assertThat(chunk.locationLabel()).isEqualTo("第 8 页");
+            assertThat(chunk.text()).startsWith("退款规范 > 5 优惠处理");
+        });
+    }
 }

@@ -34,6 +34,8 @@ class MilvusVectorIndexTest {
             assertThat(spec.primaryKeyField()).isEqualTo("chunk_id");
         });
         assertThat(gateway.lastFilter).contains("tenant_id == 1").contains("knowledge_base_id in [2]");
+        assertThat(gateway.lastRows).singleElement().satisfies(row ->
+                assertThat(row.chunk().titlePath()).isEqualTo("退款规范 > 5 优惠处理"));
         assertThat(hits).singleElement().satisfies(hit -> assertThat(hit.chunk().chunkId()).isEqualTo("1-3-4-0"));
     }
 
@@ -61,13 +63,15 @@ class MilvusVectorIndexTest {
 
     private IndexChunk chunk() {
         return new IndexChunk("1-3-4-0", 1L, 2L, 3L, 4L, 0,
-                "退款规则", "售后", "签收后七日内可申请退款", "abc", "{\"pageNumber\":3}");
+                "退款规则", "退款规范 > 5 优惠处理", "签收后七日内可申请退款", "abc",
+                "{\"pageNumber\":3}");
     }
 
     private static final class CapturingGateway implements MilvusGateway {
         private final List<MilvusCollectionSpec> created = new ArrayList<>();
         private MilvusCollectionSpec described;
         private String lastFilter;
+        private List<MilvusVectorRow> lastRows = List.of();
         private final Map<String, String> fingerprints = new LinkedHashMap<>();
 
         @Override
@@ -86,6 +90,7 @@ class MilvusVectorIndexTest {
 
         @Override
         public long upsert(String collection, List<MilvusVectorRow> rows) {
+            lastRows = List.copyOf(rows);
             rows.forEach(row -> fingerprints.put(row.chunk().chunkId(), row.chunk().contentSha256()));
             return rows.size();
         }

@@ -54,7 +54,7 @@ class ElasticsearchKeywordIndexTest {
             properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
             ElasticsearchKeywordIndex index = new ElasticsearchKeywordIndex(properties);
             IndexChunk chunk = new IndexChunk(
-                    "1-3-4-0", 1L, 2L, 3L, 4L, 0, "退款规则", "售后",
+                    "1-3-4-0", 1L, 2L, 3L, 4L, 0, "退款规则", "退款规范 > 5 优惠处理",
                     "签收后七日内可申请退款", "abc", "{\"pageNumber\":3}");
 
             index.ensureReady();
@@ -73,6 +73,7 @@ class ElasticsearchKeywordIndexTest {
             assertThat(requests).anySatisfy(value -> assertThat(value)
                     .startsWith("POST /_bulk?refresh=wait_for")
                     .contains("\"_id\":\"1-3-4-0\"")
+                    .contains("\"titlePath\":\"退款规范 > 5 优惠处理\"")
                     .contains("knowledge_chunks_draft_v1"));
             assertThat(requests).anySatisfy(value -> assertThat(value)
                     .startsWith("POST /knowledge_chunks_published_v1/_search")
