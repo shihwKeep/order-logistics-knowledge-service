@@ -82,6 +82,49 @@ class PdfStructureAnalyzerTest {
         });
     }
 
+    @Test
+    void doesNotTreatBoldBodySizedTableHeaderAsHeading() {
+        List<ParsedUnit> units = analyzer.analyze("订单规范.pdf", List.of(layout(1,
+                line("1 订单边界", 17, true, 0.10),
+                line("本节说明订单事实边界。", 9.4, false, 0.18),
+                line("场景或对象 判断条件 处理要求", 7.8, true, 0.32),
+                line("主订单 交易汇总 不得作为拣货单", 7.6, false, 0.37),
+                line("子订单 仓库履约 必须关联主订单", 7.6, false, 0.42))));
+
+        assertThat(units).singleElement().satisfies(unit -> {
+            assertThat(unit.titlePath()).isEqualTo("订单规范 > 1 订单边界");
+            assertThat(unit.text()).contains("场景或对象 判断条件 处理要求", "主订单 交易汇总");
+        });
+    }
+
+    @Test
+    void keepsTableOfContentsInOneUnitWithoutPollutingFollowingPage() {
+        List<ParsedUnit> units = analyzer.analyze("订单规范.pdf", List.of(
+                layout(1,
+                        line("目录", 17, true, 0.10),
+                        line("目录用于展示章节结构。", 7.8, false, 0.18),
+                        line("1 适用范围与订单边界", 10, false, 0.30),
+                        line("2 订单创建与幂等控制", 10, false, 0.36),
+                        line("3 价格计算与优惠分摊", 10, false, 0.42),
+                        line("4 库存预占、确认与释放", 10, false, 0.48)),
+                layout(2,
+                        line("本页是没有新章节标题的正文。", 9.4, false, 0.20))));
+
+        assertThat(units).hasSize(2);
+        assertThat(units.getFirst().titlePath()).isEqualTo("订单规范 > 目录");
+        assertThat(units.getFirst().text()).contains("1 适用范围与订单边界", "4 库存预占、确认与释放");
+        assertThat(units.getLast().titlePath()).isEqualTo("订单规范");
+    }
+
+    @Test
+    void doesNotRepeatFilenameRootWhenCoverHeadingHasSameText() {
+        ParsedUnit unit = analyzer.analyze("订单规范.pdf", List.of(layout(1,
+                line("订单规范", 25, true, 0.20),
+                line("订单创建、支付与履约", 13, false, 0.30)))).getFirst();
+
+        assertThat(unit.titlePath()).isEqualTo("订单规范");
+    }
+
     private PdfPageLayout layout(int pageNumber, PdfTextLine... lines) {
         List<PdfTextLine> pageLines = Arrays.asList(lines);
         return new PdfPageLayout(pageNumber, 700, 1000,

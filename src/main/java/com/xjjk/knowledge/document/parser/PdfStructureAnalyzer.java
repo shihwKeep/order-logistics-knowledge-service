@@ -21,6 +21,8 @@ public class PdfStructureAnalyzer {
     private static final Pattern HEADING_NUMBER = Pattern.compile(
             "^(?:\\d+(?:\\.\\d+)*(?:[\\s、.．]|$)|第[一二三四五六七八九十百千万零〇0-9]+[章节篇部分]).*$");
     private static final Pattern BODY_LIST_MARKER = Pattern.compile("^\\d+[.、．]\\s+.*$");
+    private static final Pattern TABLE_OF_CONTENTS = Pattern.compile(
+            "^(?:目录|目次|contents|table\\s+of\\s+contents)$", Pattern.CASE_INSENSITIVE);
 
     private final PdfRepeatedArtifactDetector artifactDetector;
 
@@ -41,8 +43,14 @@ public class PdfStructureAnalyzer {
         int nextIndex = 1;
 
         for (PdfPageLayout page : pages) {
+            boolean tableOfContentsPage = isTableOfContentsPage(page, artifacts);
+            // 目录是独立导航内容：使用临时标题栈，既不继承封面层级，也不污染后续正文。
+            String[] pageHeadingStack = tableOfContentsPage
+                    ? new String[MAX_HEADING_LEVEL]
+                    : headingStack;
             PageFragments fragments = analyzePage(
-                    page, artifacts, bodyFont, headingFontLevels, root, headingStack, nextIndex);
+                    page, artifacts, bodyFont, headingFontLevels, root,
+                    pageHeadingStack, nextIndex, tableOfContentsPage);
             units.addAll(fragments.units());
             nextIndex = fragments.nextIndex();
         }
@@ -56,7 +64,8 @@ public class PdfStructureAnalyzer {
             List<Double> headingFontLevels,
             String root,
             String[] headingStack,
-            int nextIndex) {
+            int nextIndex,
+            boolean tableOfContentsPage) {
         List<ParsedUnit> units = new ArrayList<>();
         StringBuilder pendingRaw = new StringBuilder();
         Fragment current = null;
@@ -75,7 +84,9 @@ public class PdfStructureAnalyzer {
 
             double gapBefore = gapBefore(lines, index);
             double gapAfter = gapAfter(lines, index);
-            if (isHeading(line, bodyFont, gapBefore, gapAfter, page.ocrConfidence() != null)) {
+            if (isHeading(
+                    line, bodyFont, gapBefore, gapAfter,
+                    page.ocrConfidence() != null, tableOfContentsPage)) {
                 if (current != null && current.hasContent()) {
                     units.add(toUnit(current, page, nextIndex++));
                 }
@@ -128,10 +139,14 @@ public class PdfStructureAnalyzer {
             double bodyFont,
             double gapBefore,
             double gapAfter,
-            boolean ocrPage) {
+            boolean ocrPage,
+            boolean tableOfContentsPage) {
         String text = line.text().strip();
         if (text.isEmpty() || text.length() > 100 || endsLikeSentence(text)) {
             return false;
+        }
+        if (tableOfContentsPage) {
+            return TABLE_OF_CONTENTS.matcher(text).matches();
         }
         boolean largerFont = line.fontSize() >= bodyFont * 1.18D;
         boolean typographyEvidence = largerFont || line.bold();
@@ -141,6 +156,10 @@ public class PdfStructureAnalyzer {
             return false;
         }
         if (!typographyEvidence && BODY_LIST_MARKER.matcher(text).matches()) {
+            return false;
+        }
+        // 与正文同字号的粗体表头也常有留白且文本较短；没有字号或章节编号证据时保守按正文处理。
+        if (!largerFont && !numberingEvidence) {
             return false;
         }
         int score = 0;
@@ -163,6 +182,9 @@ public class PdfStructureAnalyzer {
     }
 
     private int headingLevel(String text, double fontSize, List<Double> headingFontLevels) {
+        if (TABLE_OF_CONTENTS.matcher(text.strip()).matches()) {
+            return 1;
+        }
         Matcher decimal = DECIMAL_HEADING.matcher(text);
         if (decimal.matches()) {
             return Math.min(MAX_HEADING_LEVEL, decimal.group(1).split("\\.").length);
@@ -191,8 +213,21 @@ public class PdfStructureAnalyzer {
         }
         Arrays.stream(headings)
                 .filter(value -> value != null && !value.isBlank())
-                .forEach(segments::add);
+                .forEach(value -> {
+                    if (segments.isEmpty() || !segments.getLast().equals(value)) {
+                        segments.add(value);
+                    }
+                });
         return limitTitlePath(segments);
+    }
+
+    private boolean isTableOfContentsPage(PdfPageLayout page, Set<PdfTextLine> artifacts) {
+        return page.lines().stream()
+                .filter(line -> !artifacts.contains(line))
+                .map(PdfTextLine::text)
+                .filter(text -> text != null && !text.isBlank())
+                .limit(4)
+                .anyMatch(text -> TABLE_OF_CONTENTS.matcher(text.strip()).matches());
     }
 
     /** 超长路径优先丢弃最旧的中间层级，始终保留当前最近标题。 */
