@@ -8,9 +8,22 @@ public record ParsedUnit(
         String titlePath,
         String text,
         Double ocrConfidence,
-        boolean lowConfidence) {
+        boolean lowConfidence,
+        String rawText) {
+
+    /** 兼容其他格式解析器：未区分原文与有效文本时，两者使用相同内容。 */
+    public ParsedUnit(
+            String unitType,
+            int unitIndex,
+            String locationLabel,
+            String titlePath,
+            String text,
+            Double ocrConfidence,
+            boolean lowConfidence) {
+        this(unitType, unitIndex, locationLabel, titlePath, text, ocrConfidence, lowConfidence, text);
+    }
 
     public static ParsedUnit text(int index, String location, String titlePath, String text) {
-        return new ParsedUnit("TEXT", index, location, titlePath, text, null, false);
+        return new ParsedUnit("TEXT", index, location, titlePath, text, null, false, text);
     }
 }

@@ -117,7 +117,7 @@ public class IngestionArtifactRepository {
         entity.setUnitIndex(unit.unitIndex());
         entity.setLocationLabel(unit.locationLabel());
         entity.setTitlePath(unit.titlePath());
-        entity.setRawText(unit.text());
+        entity.setRawText(unit.rawText());
         entity.setEffectiveText(normalizer.normalize(unit.text()));
         entity.setOcrConfidence(unit.ocrConfidence());
         entity.setLowConfidence(unit.lowConfidence());
