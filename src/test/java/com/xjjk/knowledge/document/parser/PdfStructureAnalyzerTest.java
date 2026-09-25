@@ -66,6 +66,22 @@ class PdfStructureAnalyzerTest {
         assertThat(unit.titlePath()).hasSizeLessThanOrEqualTo(1000).endsWith("最近标题");
     }
 
+    @Test
+    void doesNotInferOcrHeadingFromBoxHeightAlone() {
+        List<PdfTextLine> lines = List.of(
+                line("Important note", 18, false, 0.005),
+                line("Scanned body text.", 10, false, 0.025));
+        PdfPageLayout ocrPage = new PdfPageLayout(
+                1, 700, 1000, "Important note\nScanned body text.", lines, 0.88D, false);
+
+        List<ParsedUnit> units = analyzer.analyze("scan.pdf", List.of(ocrPage));
+
+        assertThat(units).singleElement().satisfies(unit -> {
+            assertThat(unit.titlePath()).isEqualTo("scan");
+            assertThat(unit.text()).contains("Important note", "Scanned body text.");
+        });
+    }
+
     private PdfPageLayout layout(int pageNumber, PdfTextLine... lines) {
         List<PdfTextLine> pageLines = Arrays.asList(lines);
         return new PdfPageLayout(pageNumber, 700, 1000,

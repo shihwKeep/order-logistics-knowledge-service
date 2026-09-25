@@ -1,6 +1,9 @@
 package com.xjjk.knowledge.document.parser;
 
+import com.xjjk.knowledge.document.ocr.OcrBlock;
+import com.xjjk.knowledge.document.ocr.OcrResult;
 import java.io.IOException;
+import java.util.List;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -26,6 +29,26 @@ class PdfLayoutExtractorTest {
             assertThat(page.lines().getFirst().bold()).isTrue();
             assertThat(page.lines().getFirst().yRatio()).isBetween(0D, 1D);
         }
+    }
+
+    @Test
+    void scalesOcrPixelBoxesIntoPdfCoordinates() {
+        OcrResult result = new OcrResult("request", 0, List.of(new OcrBlock(
+                "扫描正文", 0.91,
+                List.of(List.of(100, 200), List.of(900, 200),
+                        List.of(900, 260), List.of(100, 260)), false)));
+
+        PdfPageLayout page = new PdfLayoutExtractor().fromOcr(
+                2, 700, 1000, 1400, 2000, result);
+
+        assertThat(page.pageNumber()).isEqualTo(2);
+        assertThat(page.ocrConfidence()).isEqualTo(0.91D);
+        assertThat(page.lines()).singleElement().satisfies(line -> {
+            assertThat(line.x()).isEqualTo(50D);
+            assertThat(line.y()).isEqualTo(100D);
+            assertThat(line.width()).isEqualTo(400D);
+            assertThat(line.height()).isEqualTo(30D);
+        });
     }
 
     private PDDocument layoutPdf() throws IOException {

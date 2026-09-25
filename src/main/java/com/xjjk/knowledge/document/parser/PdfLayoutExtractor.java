@@ -1,5 +1,7 @@
 package com.xjjk.knowledge.document.parser;
 
+import com.xjjk.knowledge.document.ocr.OcrBlock;
+import com.xjjk.knowledge.document.ocr.OcrResult;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,6 +31,55 @@ public class PdfLayoutExtractor {
         String rawText = String.join("\n", lines.stream().map(PdfTextLine::text).toList());
         return new PdfPageLayout(
                 pageIndex + 1, pageWidth, pageHeight, rawText, lines, null, false);
+    }
+
+    /**
+     * OCR 坐标属于渲染图片像素空间，必须按 X/Y 比例换算到 PDF 页面坐标，
+     * 否则页边判断和行间距都会随渲染 DPI 改变。
+     */
+    public PdfPageLayout fromOcr(
+            int pageNumber,
+            double pageWidth,
+            double pageHeight,
+            int imageWidth,
+            int imageHeight,
+            OcrResult result) {
+        double scaleX = imageWidth <= 0 ? 1D : pageWidth / imageWidth;
+        double scaleY = imageHeight <= 0 ? 1D : pageHeight / imageHeight;
+        List<PdfTextLine> lines = new ArrayList<>();
+        int fallbackIndex = 0;
+        for (OcrBlock block : result.blocks()) {
+            if (block.text() == null || block.text().isBlank()) {
+                continue;
+            }
+            Box box = box(block, scaleX, scaleY, fallbackIndex++, pageWidth);
+            lines.add(new PdfTextLine(
+                    block.text().strip(), box.x(), box.y(), box.width(), box.height(),
+                    Math.max(1D, box.height()), "OCR", false, pageWidth, pageHeight));
+        }
+        String rawText = String.join("\n", lines.stream().map(PdfTextLine::text).toList());
+        return new PdfPageLayout(
+                pageNumber, pageWidth, pageHeight, rawText, lines,
+                result.averageConfidence(), result.hasLowConfidence());
+    }
+
+    private Box box(
+            OcrBlock block,
+            double scaleX,
+            double scaleY,
+            int fallbackIndex,
+            double pageWidth) {
+        List<List<Integer>> points = block.box();
+        if (points.size() >= 2 && points.stream().allMatch(point -> point.size() >= 2)) {
+            double minX = points.stream().mapToDouble(point -> point.get(0)).min().orElse(0D) * scaleX;
+            double maxX = points.stream().mapToDouble(point -> point.get(0)).max().orElse(0D) * scaleX;
+            double minY = points.stream().mapToDouble(point -> point.get(1)).min().orElse(0D) * scaleY;
+            double maxY = points.stream().mapToDouble(point -> point.get(1)).max().orElse(0D) * scaleY;
+            return new Box(minX, minY, Math.max(0D, maxX - minX), Math.max(1D, maxY - minY));
+        }
+        // 无坐标时只保留 OCR 返回顺序，并使用中性宽度避免凭行长猜测标题。
+        double y = 40D + fallbackIndex * 20D;
+        return new Box(40D, y, Math.max(1D, pageWidth * 0.80D), 12D);
     }
 
     /**
@@ -152,5 +203,8 @@ public class PdfLayoutExtractor {
         private List<TextPosition> positions() {
             return List.copyOf(positions);
         }
+    }
+
+    private record Box(double x, double y, double width, double height) {
     }
 }

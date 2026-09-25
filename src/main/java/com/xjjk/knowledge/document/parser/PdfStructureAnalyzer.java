@@ -75,7 +75,7 @@ public class PdfStructureAnalyzer {
 
             double gapBefore = gapBefore(lines, index);
             double gapAfter = gapAfter(lines, index);
-            if (isHeading(line, bodyFont, gapBefore, gapAfter)) {
+            if (isHeading(line, bodyFont, gapBefore, gapAfter, page.ocrConfidence() != null)) {
                 if (current != null && current.hasContent()) {
                     units.add(toUnit(current, page, nextIndex++));
                 }
@@ -124,13 +124,22 @@ public class PdfStructureAnalyzer {
 
     /** 标题必须同时获得多种证据；正文大小的“1. 列表项”按保守策略保留为正文。 */
     private boolean isHeading(
-            PdfTextLine line, double bodyFont, double gapBefore, double gapAfter) {
+            PdfTextLine line,
+            double bodyFont,
+            double gapBefore,
+            double gapAfter,
+            boolean ocrPage) {
         String text = line.text().strip();
         if (text.isEmpty() || text.length() > 100 || endsLikeSentence(text)) {
             return false;
         }
         boolean largerFont = line.fontSize() >= bodyFont * 1.18D;
         boolean typographyEvidence = largerFont || line.bold();
+        boolean spacingEvidence = gapBefore >= bodyFont * 0.80D || gapAfter >= bodyFont * 0.80D;
+        boolean numberingEvidence = HEADING_NUMBER.matcher(text).matches();
+        if (ocrPage && !numberingEvidence && !spacingEvidence) {
+            return false;
+        }
         if (!typographyEvidence && BODY_LIST_MARKER.matcher(text).matches()) {
             return false;
         }
@@ -141,10 +150,10 @@ public class PdfStructureAnalyzer {
         if (line.bold()) {
             score++;
         }
-        if (gapBefore >= bodyFont * 0.80D || gapAfter >= bodyFont * 0.80D) {
+        if (spacingEvidence) {
             score++;
         }
-        if (HEADING_NUMBER.matcher(text).matches()) {
+        if (numberingEvidence) {
             score++;
         }
         if (line.width() <= line.pageWidth() * 0.75D) {
