@@ -36,6 +36,13 @@ public class MybatisReleaseRepository implements ReleaseRepository {
     }
 
     @Override
+    public Optional<ReleaseItem> findPublishableItem(
+            long tenantId, long knowledgeBaseId, long documentId, long versionId) {
+        return Optional.ofNullable(mapper.findPublishableItem(
+                tenantId, knowledgeBaseId, documentId, versionId));
+    }
+
+    @Override
     public Optional<KnowledgeRelease> findByRequest(long tenantId, String requestId) {
         return Optional.ofNullable(mapper.findByRequest(tenantId, requestId));
     }
@@ -73,6 +80,11 @@ public class MybatisReleaseRepository implements ReleaseRepository {
     @Override
     public Optional<KnowledgeRelease> find(long tenantId, long knowledgeBaseId, long releaseId) {
         return Optional.ofNullable(mapper.find(tenantId, knowledgeBaseId, releaseId));
+    }
+
+    @Override
+    public List<KnowledgeRelease> list(long tenantId, long knowledgeBaseId) {
+        return mapper.list(tenantId, knowledgeBaseId);
     }
 
     @Override

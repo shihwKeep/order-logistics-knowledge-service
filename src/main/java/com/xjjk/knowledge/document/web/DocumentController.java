@@ -14,14 +14,16 @@ import com.xjjk.knowledge.document.web.dto.DocumentResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentUnitResponse;
 import com.xjjk.knowledge.document.web.dto.DocumentVersionResponse;
 import com.xjjk.knowledge.document.web.dto.IngestionTaskResponse;
-import com.xjjk.knowledge.publication.PublicationRecord;
 import com.xjjk.knowledge.publication.PublicationService;
+import com.xjjk.knowledge.publication.release.web.ReleaseResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -249,33 +251,39 @@ public class DocumentController {
     }
 
     @PostMapping("/{documentId}/versions/{versionId}/publish")
-    public ApiResponse<PublicationRecord> publish(
+    public ResponseEntity<ApiResponse<ReleaseResponse>> publish(
             @PathVariable @Positive long tenantId, @PathVariable @Positive long knowledgeBaseId,
             @PathVariable @Positive long documentId, @PathVariable @Positive long versionId,
             Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
         String requestId = prepareRequestId(request, response);
-        return ApiResponse.success(publicationService.publish(
-                principal(authentication), tenantId, knowledgeBaseId, documentId, versionId, requestId));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(
+                ReleaseResponse.from(publicationService.publish(
+                        principal(authentication), tenantId, knowledgeBaseId,
+                        documentId, versionId, requestId))));
     }
 
     @PostMapping("/{documentId}/versions/{versionId}/rollback")
-    public ApiResponse<PublicationRecord> rollback(
+    public ResponseEntity<ApiResponse<ReleaseResponse>> rollback(
             @PathVariable @Positive long tenantId, @PathVariable @Positive long knowledgeBaseId,
             @PathVariable @Positive long documentId, @PathVariable @Positive long versionId,
             Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
         String requestId = prepareRequestId(request, response);
-        return ApiResponse.success(publicationService.rollback(
-                principal(authentication), tenantId, knowledgeBaseId, documentId, versionId, requestId));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(
+                ReleaseResponse.from(publicationService.rollback(
+                        principal(authentication), tenantId, knowledgeBaseId,
+                        documentId, versionId, requestId))));
     }
 
     @PostMapping("/{documentId}/disable")
-    public ApiResponse<PublicationRecord> disable(
+    public ResponseEntity<ApiResponse<ReleaseResponse>> disable(
             @PathVariable @Positive long tenantId, @PathVariable @Positive long knowledgeBaseId,
             @PathVariable @Positive long documentId,
             Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
         String requestId = prepareRequestId(request, response);
-        return ApiResponse.success(publicationService.disable(
-                principal(authentication), tenantId, knowledgeBaseId, documentId, requestId));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(
+                ReleaseResponse.from(publicationService.disable(
+                        principal(authentication), tenantId, knowledgeBaseId,
+                        documentId, requestId))));
     }
 
     private AdminPrincipal principal(Authentication authentication) {

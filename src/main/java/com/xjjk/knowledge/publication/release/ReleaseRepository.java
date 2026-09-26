@@ -12,6 +12,9 @@ public interface ReleaseRepository {
     Optional<ReleaseItem> findReadyItem(
             long tenantId, long knowledgeBaseId, long documentId, long versionId);
 
+    Optional<ReleaseItem> findPublishableItem(
+            long tenantId, long knowledgeBaseId, long documentId, long versionId);
+
     Optional<KnowledgeRelease> findByRequest(long tenantId, String requestId);
 
     int nextReleaseNumber(long tenantId, long knowledgeBaseId);
@@ -23,6 +26,8 @@ public interface ReleaseRepository {
     void enqueue(KnowledgeRelease release);
 
     Optional<KnowledgeRelease> find(long tenantId, long knowledgeBaseId, long releaseId);
+
+    List<KnowledgeRelease> list(long tenantId, long knowledgeBaseId);
 
     List<DocumentVersion> changedVersions(KnowledgeRelease release);
 

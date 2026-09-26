@@ -108,6 +108,7 @@ public class AdminSessionFilter extends OncePerRequestFilter {
     private boolean requiresFreshRoles(HttpServletRequest request) {
         String path = request.getRequestURI();
         return "DELETE".equals(request.getMethod())
+                || ("POST".equals(request.getMethod()) && path.endsWith("/releases"))
                 || path.endsWith("/publish")
                 || path.endsWith("/rollback")
                 || path.endsWith("/disable");

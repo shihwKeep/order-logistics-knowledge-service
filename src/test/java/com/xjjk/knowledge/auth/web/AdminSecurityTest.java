@@ -152,6 +152,19 @@ class AdminSecurityTest {
     }
 
     @Test
+    void creatingReleaseForcesImmediateRoleRefresh() throws Exception {
+        when(sessionRepository.find("valid")).thenReturn(Optional.of(session));
+        when(roleRefresher.refreshIfRequired("valid", session, true)).thenReturn(session);
+
+        mvc.perform(post("/api/v1/admin/tenants/1/knowledge-bases/7/releases")
+                        .with(csrf())
+                        .cookie(new jakarta.servlet.http.Cookie("KB_ADMIN_SESSION", "valid")))
+                .andExpect(status().isOk());
+
+        verify(roleRefresher).refreshIfRequired("valid", session, true);
+    }
+
+    @Test
     void staleRoleThatWasDisabledRejectsRequestAndDeletesSession() throws Exception {
         when(sessionRepository.find("valid")).thenReturn(Optional.of(session));
         when(roleRefresher.refreshIfRequired("valid", session, false))
@@ -202,6 +215,11 @@ class AdminSecurityProbeController {
     @PostMapping("/api/v1/admin/security-probe/disable")
     ApiResponse<String> disableProbe() {
         return ApiResponse.success("disabled");
+    }
+
+    @PostMapping("/api/v1/admin/tenants/1/knowledge-bases/7/releases")
+    ApiResponse<String> releaseProbe() {
+        return ApiResponse.success("release");
     }
 
     @PostMapping("/api/v1/internal/security-probe")

@@ -9,9 +9,9 @@ import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.domain.KnowledgeDocument;
 import com.xjjk.knowledge.document.service.DocumentUploadService;
 import com.xjjk.knowledge.document.service.DocumentQueryService;
-import com.xjjk.knowledge.publication.PublicationAction;
-import com.xjjk.knowledge.publication.PublicationRecord;
 import com.xjjk.knowledge.publication.PublicationService;
+import com.xjjk.knowledge.publication.release.KnowledgeRelease;
+import com.xjjk.knowledge.publication.release.ReleaseStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -107,18 +107,20 @@ class DocumentControllerTest {
                 .standaloneSetup(new DocumentController(service, null, null, publications))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
-        PublicationRecord record = new PublicationRecord(
-                31L, 1L, 10L, 13L, null, 21L, PublicationAction.PUBLISH,
-                10567L, "publish-1", 2, "manifest", LocalDateTime.of(2026, 9, 9, 21, 0));
+        LocalDateTime now = LocalDateTime.of(2026, 9, 9, 21, 0);
+        KnowledgeRelease release = new KnowledgeRelease(
+                31L, 1L, 10L, 2, ReleaseStatus.PREPARING, 30L,
+                "publish-1", "a".repeat(64), 2, 10567L,
+                null, now, null, now);
         when(publications.publish(any(AdminPrincipal.class), eq(1L), eq(10L), eq(13L), eq(21L), eq("publish-1")))
-                .thenReturn(record);
+                .thenReturn(release);
 
         publicationMvc.perform(post("/api/v1/admin/tenants/1/knowledge-bases/10/documents/13/versions/21/publish")
                         .principal(authentication).header("X-Request-Id", "publish-1"))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(header().string("X-Request-Id", "publish-1"))
-                .andExpect(jsonPath("$.data.action").value("PUBLISH"))
-                .andExpect(jsonPath("$.data.toVersionId").value(21));
+                .andExpect(jsonPath("$.data.status").value("PREPARING"))
+                .andExpect(jsonPath("$.data.baseReleaseId").value(30));
     }
 
     @Test

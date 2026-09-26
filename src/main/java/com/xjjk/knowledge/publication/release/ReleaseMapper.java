@@ -63,6 +63,24 @@ public interface ReleaseMapper {
             @Param("documentId") long documentId,
             @Param("versionId") long versionId);
 
+    @Select("""
+            SELECT 0 AS release_id,v.tenant_id,v.knowledge_base_id,v.document_id,
+                   v.id AS version_id,v.index_manifest_sha256 AS content_manifest_sha256
+              FROM kb_document_version v
+              JOIN kb_document d
+                ON d.tenant_id=v.tenant_id AND d.knowledge_base_id=v.knowledge_base_id
+               AND d.id=v.document_id AND d.is_deleted=0
+             WHERE v.tenant_id=#{tenantId} AND v.knowledge_base_id=#{knowledgeBaseId}
+               AND v.document_id=#{documentId} AND v.id=#{versionId}
+               AND v.status IN ('READY','PUBLISHED','ARCHIVED')
+               AND v.index_manifest_sha256 IS NOT NULL
+            """)
+    ReleaseItem findPublishableItem(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId);
+
     @Select("SELECT " + RELEASE_COLUMNS + " FROM kb_release WHERE tenant_id=#{tenantId} AND request_id=#{requestId}")
     KnowledgeRelease findByRequest(
             @Param("tenantId") long tenantId,
@@ -81,6 +99,17 @@ public interface ReleaseMapper {
             @Param("tenantId") long tenantId,
             @Param("knowledgeBaseId") long knowledgeBaseId,
             @Param("releaseId") long releaseId);
+
+    @Select("""
+            SELECT id,tenant_id,knowledge_base_id,release_number,status,base_release_id,request_id,
+                   manifest_sha256,base_row_version,created_by,failure_code,created_at,activated_at,updated_at
+              FROM kb_release
+             WHERE tenant_id=#{tenantId} AND knowledge_base_id=#{knowledgeBaseId}
+             ORDER BY release_number DESC
+            """)
+    List<KnowledgeRelease> list(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId);
 
     @Select("""
             SELECT id,tenant_id,knowledge_base_id,release_number,status,base_release_id,request_id,

@@ -125,6 +125,70 @@ class ReleaseServiceTest {
         verify(repository, never()).insert(any());
     }
 
+    @Test
+    void rechecksIdempotencyAfterKnowledgeBaseLock() {
+        KnowledgeRelease concurrent = KnowledgeRelease.preparing(
+                1L, 7L, 2, 50L, "concurrent",
+                "b".repeat(64), 6, 10567L).withId(51L);
+        when(repository.findByRequest(1L, "concurrent"))
+                .thenReturn(Optional.empty(), Optional.of(concurrent));
+        when(repository.lockBaseline(1L, 7L))
+                .thenReturn(new ReleaseBaseline(50L, 6, "old"));
+        when(repository.items(51L)).thenReturn(List.of(item(51L, 11L, 102L, "b")));
+
+        KnowledgeRelease result = service.create(
+                principal, 1L, 7L,
+                List.of(new ReleaseReplacement(11L, 102L)), "concurrent");
+
+        assertThat(result).isEqualTo(concurrent);
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
+    void rollbackCopiesHistoricalManifestIntoANewRelease() {
+        KnowledgeRelease historical = KnowledgeRelease.preparing(
+                1L, 7L, 1, null, "old", "a".repeat(64), 1, 10567L)
+                .withId(40L);
+        List<ReleaseItem> historicalItems = List.of(
+                item(40L, 11L, 81L, "a"), item(40L, 12L, 82L, "b"));
+        when(repository.find(1L, 7L, 40L)).thenReturn(Optional.of(historical));
+        when(repository.items(40L)).thenReturn(historicalItems);
+        when(repository.lockBaseline(1L, 7L))
+                .thenReturn(new ReleaseBaseline(50L, 6, "current"));
+        when(repository.nextReleaseNumber(1L, 7L)).thenReturn(3);
+        when(repository.insert(any())).thenAnswer(invocation ->
+                invocation.<KnowledgeRelease>getArgument(0).withId(51L));
+
+        KnowledgeRelease rollback = service.rollback(
+                principal, 1L, 7L, 40L, "rollback-40");
+
+        assertThat(rollback.baseReleaseId()).isEqualTo(50L);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReleaseItem>> captured = ArgumentCaptor.forClass(List.class);
+        verify(repository).insertItems(org.mockito.ArgumentMatchers.eq(51L), captured.capture());
+        assertThat(captured.getValue())
+                .extracting(ReleaseItem::documentId, ReleaseItem::versionId)
+                .containsExactly(tuple(11L, 81L), tuple(12L, 82L));
+    }
+
+    @Test
+    void disablingLastDocumentCreatesAnEmptyRelease() {
+        List<ReleaseItem> current = List.of(item(50L, 11L, 91L, "a"));
+        when(repository.lockBaseline(1L, 7L))
+                .thenReturn(new ReleaseBaseline(50L, 6, ReleaseService.manifestSha256(current)));
+        when(repository.items(50L)).thenReturn(current);
+        when(repository.nextReleaseNumber(1L, 7L)).thenReturn(2);
+        when(repository.insert(any())).thenAnswer(invocation ->
+                invocation.<KnowledgeRelease>getArgument(0).withId(51L));
+
+        KnowledgeRelease disabled = service.disableDocument(
+                principal, 1L, 7L, 11L, "disable-last");
+
+        assertThat(disabled.status()).isEqualTo(ReleaseStatus.PREPARING);
+        verify(repository).insertItems(51L, List.of());
+        verify(repository).enqueue(disabled);
+    }
+
     private static ReleaseItem item(long releaseId, long documentId, long versionId, String manifest) {
         return new ReleaseItem(releaseId, 1L, 7L, documentId, versionId, manifest.repeat(64));
     }
