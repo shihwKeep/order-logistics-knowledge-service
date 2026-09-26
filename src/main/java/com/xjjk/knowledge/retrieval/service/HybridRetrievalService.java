@@ -8,6 +8,7 @@ import com.xjjk.knowledge.retrieval.fusion.RrfFusion;
 import com.xjjk.knowledge.retrieval.index.KeywordIndex;
 import com.xjjk.knowledge.retrieval.index.VectorIndex;
 import com.xjjk.knowledge.retrieval.model.DegradationMode;
+import com.xjjk.knowledge.retrieval.model.DocumentVersionRef;
 import com.xjjk.knowledge.retrieval.model.IndexLayer;
 import com.xjjk.knowledge.retrieval.model.RankedEvidence;
 import com.xjjk.knowledge.retrieval.model.RecallCandidate;
@@ -34,6 +35,7 @@ public class HybridRetrievalService {
     private final Reranker reranker;
     private final RerankerProperties rerankerProperties;
     private final RetrievalProperties properties;
+    private final ActiveReleaseScopeLoader scopeLoader;
     private final PublishedVersionValidator publishedValidator;
     private final DraftVersionValidator draftValidator;
     private final SearchLogRecorder searchLogs;
@@ -47,6 +49,7 @@ public class HybridRetrievalService {
             Reranker reranker,
             RerankerProperties rerankerProperties,
             RetrievalProperties properties,
+            ActiveReleaseScopeLoader scopeLoader,
             PublishedVersionValidator publishedValidator,
             DraftVersionValidator draftValidator,
             SearchLogRecorder searchLogs,
@@ -58,6 +61,7 @@ public class HybridRetrievalService {
         this.reranker = reranker;
         this.rerankerProperties = rerankerProperties;
         this.properties = properties;
+        this.scopeLoader = scopeLoader;
         this.publishedValidator = publishedValidator;
         this.draftValidator = draftValidator;
         this.searchLogs = searchLogs;
@@ -85,25 +89,51 @@ public class HybridRetrievalService {
             throw new IllegalArgumentException("检索身份、请求号和问题不能为空");
         }
         long startedAt = System.nanoTime();
+        ActiveReleaseScope scope = layer == IndexLayer.PUBLISHED
+                ? scopeLoader.load(tenantId, knowledgeBaseIds)
+                : null;
+        if (scope != null && scope.isEmpty()) {
+            return emptyResult(tenantId, userId, requestId, startedAt);
+        }
+
+        QueryEmbedding embedding = prepareEmbedding(question);
+        return retrieveAttempt(
+                tenantId, userId, requestId, question, knowledgeBaseIds, layer,
+                scope, embedding, 0, startedAt);
+    }
+
+    private RetrievalResult retrieveAttempt(
+            long tenantId,
+            long userId,
+            String requestId,
+            String question,
+            List<Long> knowledgeBaseIds,
+            IndexLayer layer,
+            ActiveReleaseScope scope,
+            QueryEmbedding embedding,
+            int attempt,
+            long startedAt) {
         List<RecallCandidate> vectorCandidates = List.of();
         List<RecallCandidate> keywordCandidates = List.of();
-        boolean vectorAvailable = true;
+        boolean vectorAvailable = embedding.available();
         boolean keywordAvailable = true;
+        List<DocumentVersionRef> allowedVersions = scope == null ? List.of() : scope.versions();
 
-        try {
-            List<Float> queryVector = embeddings.embedQuery(question);
-            vectorCandidates = vectorIndex.search(
-                    layer, tenantId, knowledgeBaseIds, queryVector, properties.getRecallTopK());
-        } catch (CloudModelBudgetExceededException exception) {
-            throw new BusinessException(ApiErrorCode.KNOWLEDGE_MODEL_BUDGET_EXHAUSTED, exception);
-        } catch (RuntimeException exception) {
-            vectorAvailable = false;
-            log.warn("knowledge_vector_recall_unavailable requestId={}, exceptionType={}",
-                    requestId, exception.getClass().getSimpleName());
+        if (vectorAvailable) {
+            try {
+                vectorCandidates = vectorIndex.search(
+                        layer, tenantId, knowledgeBaseIds, allowedVersions,
+                        embedding.vector(), properties.getRecallTopK());
+            } catch (RuntimeException exception) {
+                vectorAvailable = false;
+                log.warn("knowledge_vector_recall_unavailable requestId={}, exceptionType={}",
+                        requestId, exception.getClass().getSimpleName());
+            }
         }
         try {
             keywordCandidates = keywordIndex.search(
-                    layer, tenantId, knowledgeBaseIds, question, properties.getRecallTopK());
+                    layer, tenantId, knowledgeBaseIds, allowedVersions,
+                    question, properties.getRecallTopK());
         } catch (RuntimeException exception) {
             keywordAvailable = false;
             log.warn("knowledge_keyword_recall_unavailable requestId={}, exceptionType={}",
@@ -111,7 +141,6 @@ public class HybridRetrievalService {
         }
 
         if (!vectorAvailable && !keywordAvailable) {
-            validateLayer(layer, tenantId, List.of());
             recordSafely(new SearchLogEntry(
                     tenantId, userId, requestId, properties.getVersion(), DegradationMode.ALL_RECALL_UNAVAILABLE,
                     ApiErrorCode.KNOWLEDGE_SERVICE_UNAVAILABLE.code(), false, 0, 0, 0, 0, elapsed(startedAt)));
@@ -144,7 +173,29 @@ public class HybridRetrievalService {
         }
 
         // 终审必须在精排/降级之后、返回调用方之前执行。
-        List<RankedEvidence> evidences = validateLayer(layer, tenantId, selected).stream()
+        List<RankedEvidence> validated;
+        if (layer == IndexLayer.PUBLISHED) {
+            PublishedScopeValidation validation = publishedValidator.validate(tenantId, scope, selected);
+            if (validation.releaseChanged()) {
+                if (attempt >= 1) {
+                    throw new BusinessException(ApiErrorCode.KNOWLEDGE_RELEASE_CHANGING);
+                }
+                ActiveReleaseScope latestScope = scopeLoader.load(tenantId, knowledgeBaseIds);
+                log.info(
+                        "knowledge_release_scope_changed requestId={}, previousReleaseCount={}, latestReleaseCount={}",
+                        requestId, scope.releaseIds().size(), latestScope.releaseIds().size());
+                if (latestScope.isEmpty()) {
+                    return emptyResult(tenantId, userId, requestId, startedAt);
+                }
+                return retrieveAttempt(
+                        tenantId, userId, requestId, question, knowledgeBaseIds, layer,
+                        latestScope, embedding, attempt + 1, startedAt);
+            }
+            validated = validation.evidences();
+        } else {
+            validated = draftValidator.validate(tenantId, selected);
+        }
+        List<RankedEvidence> evidences = validated.stream()
                 .limit(properties.getFinalTopK())
                 .toList();
         boolean answerable = !evidences.isEmpty();
@@ -161,11 +212,29 @@ public class HybridRetrievalService {
         return result;
     }
 
-    private List<RankedEvidence> validateLayer(
-            IndexLayer layer, long tenantId, List<RankedEvidence> candidates) {
-        return layer == IndexLayer.PUBLISHED
-                ? publishedValidator.validate(tenantId, candidates)
-                : draftValidator.validate(tenantId, candidates);
+    private QueryEmbedding prepareEmbedding(String question) {
+        try {
+            return new QueryEmbedding(embeddings.embedQuery(question), true);
+        } catch (CloudModelBudgetExceededException exception) {
+            throw new BusinessException(ApiErrorCode.KNOWLEDGE_MODEL_BUDGET_EXHAUSTED, exception);
+        } catch (RuntimeException exception) {
+            log.warn("knowledge_query_embedding_unavailable exceptionType={}",
+                    exception.getClass().getSimpleName());
+            return new QueryEmbedding(List.of(), false);
+        }
+    }
+
+    private RetrievalResult emptyResult(
+            long tenantId, long userId, String requestId, long startedAt) {
+        String resultCode = "NO_RELEVANT_EVIDENCE";
+        RetrievalResult result = new RetrievalResult(
+                false, List.of(), properties.getVersion(), DegradationMode.NONE,
+                resultCode, 0, 0, 0);
+        recordSafely(new SearchLogEntry(
+                tenantId, userId, requestId, properties.getVersion(), DegradationMode.NONE,
+                resultCode, false, 0, 0, 0, 0, elapsed(startedAt)));
+        metrics.recordRetrieval(DegradationMode.NONE.name(), resultCode, elapsed(startedAt));
+        return result;
     }
 
     private void recordSafely(SearchLogEntry entry) {
@@ -179,5 +248,11 @@ public class HybridRetrievalService {
 
     private long elapsed(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private record QueryEmbedding(List<Float> vector, boolean available) {
+        private QueryEmbedding {
+            vector = vector == null ? List.of() : List.copyOf(vector);
+        }
     }
 }

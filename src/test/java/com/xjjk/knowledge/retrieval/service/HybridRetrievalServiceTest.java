@@ -14,6 +14,7 @@ import com.xjjk.knowledge.retrieval.model.RankedEvidence;
 import com.xjjk.knowledge.retrieval.model.RecallCandidate;
 import com.xjjk.knowledge.retrieval.model.RecallSource;
 import com.xjjk.knowledge.retrieval.model.DegradationMode;
+import com.xjjk.knowledge.retrieval.model.RetrievalResult;
 import com.xjjk.knowledge.retrieval.rerank.Reranker;
 import com.xjjk.knowledge.retrieval.rerank.RerankerProperties;
 import com.xjjk.knowledge.retrieval.rerank.RerankerUnavailableException;
@@ -22,12 +23,18 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
@@ -49,7 +56,7 @@ class HybridRetrievalServiceTest {
         assertThat(result.degradationMode()).isEqualTo(DegradationMode.NONE);
         assertThat(fixture.vector.lastTopK).isEqualTo(30);
         assertThat(fixture.keyword.lastTopK).isEqualTo(30);
-        verify(fixture.validator).validate(eq(1L), anyList());
+        verify(fixture.validator).validate(eq(1L), eq(fixture.defaultScope), anyList());
     }
 
     @Test
@@ -63,7 +70,7 @@ class HybridRetrievalServiceTest {
 
         assertThat(result.answerable()).isFalse();
         assertThat(result.resultCode()).isEqualTo("NO_RELEVANT_EVIDENCE");
-        verify(fixture.validator).validate(eq(1L), anyList());
+        verify(fixture.validator).validate(eq(1L), eq(fixture.defaultScope), anyList());
     }
 
     @Test
@@ -119,7 +126,7 @@ class HybridRetrievalServiceTest {
         assertThat(result.answerable()).isFalse();
         assertThat(result.degradationMode()).isEqualTo(DegradationMode.NO_RELIABLE_EVIDENCE);
         assertThat(result.resultCode()).isEqualTo("NO_RELIABLE_EVIDENCE");
-        verify(fixture.validator).validate(eq(1L), anyList());
+        verify(fixture.validator).validate(eq(1L), eq(fixture.defaultScope), anyList());
     }
 
     @Test
@@ -170,7 +177,8 @@ class HybridRetrievalServiceTest {
         fixture.keyword.result = List.of(candidate("stale", RecallSource.KEYWORD));
         fixture.reranker = (query, values) -> values.stream()
                 .map(value -> value.withScore(0.9D)).toList();
-        when(fixture.validator.validate(eq(1L), anyList())).thenReturn(List.of());
+        when(fixture.validator.validate(eq(1L), eq(fixture.defaultScope), anyList()))
+                .thenReturn(new PublishedScopeValidation(false, List.of()));
 
         var result = fixture.service().retrieve(
                 1L, 10567L, "request-stale", "退款规则", List.of());
@@ -195,6 +203,76 @@ class HybridRetrievalServiceTest {
         assertThat(result.answerable()).isTrue();
     }
 
+    @Test
+    void retriesOnceWithLatestReleaseScopeAndReusesEmbedding() {
+        Fixture fixture = new Fixture();
+        ActiveReleaseScope scope20 = scope(20L, 4L);
+        ActiveReleaseScope scope21 = scope(21L, 5L);
+        when(fixture.scopeLoader.load(1L, List.of(2L))).thenReturn(scope20, scope21);
+        when(fixture.validator.validate(eq(1L), eq(scope20), anyList()))
+                .thenReturn(new PublishedScopeValidation(true, List.of()));
+        when(fixture.validator.validate(eq(1L), eq(scope21), anyList()))
+                .thenAnswer(invocation -> new PublishedScopeValidation(false, invocation.getArgument(2)));
+        fixture.vector.result = List.of(candidate("shared", RecallSource.VECTOR));
+        fixture.keyword.result = List.of(candidate("shared", RecallSource.KEYWORD));
+        fixture.reranker = (query, values) -> values.stream()
+                .map(value -> value.withScore(0.9D)).toList();
+
+        RetrievalResult result = fixture.service().retrieve(
+                1L, 10567L, "request-switch", "问题", List.of(2L));
+
+        assertThat(result.answerable()).isTrue();
+        assertThat(fixture.keyword.scopes).containsExactly(scope20.versions(), scope21.versions());
+        assertThat(fixture.vector.scopes).containsExactly(scope20.versions(), scope21.versions());
+        assertThat(fixture.embeddingCalls).hasValue(1);
+        verify(fixture.scopeLoader, times(2)).load(1L, List.of(2L));
+    }
+
+    @Test
+    void failsClosedWhenReleaseChangesTwice() {
+        Fixture fixture = new Fixture();
+        ActiveReleaseScope scope20 = scope(20L, 4L);
+        ActiveReleaseScope scope21 = scope(21L, 5L);
+        when(fixture.scopeLoader.load(1L, List.of(2L))).thenReturn(scope20, scope21);
+        when(fixture.validator.validate(eq(1L), any(ActiveReleaseScope.class), anyList()))
+                .thenReturn(new PublishedScopeValidation(true, List.of()));
+        fixture.vector.result = List.of(candidate("shared", RecallSource.VECTOR));
+        fixture.keyword.result = List.of(candidate("shared", RecallSource.KEYWORD));
+        fixture.reranker = (query, values) -> values.stream()
+                .map(value -> value.withScore(0.9D)).toList();
+
+        assertThatThrownBy(() -> fixture.service().retrieve(
+                1L, 10567L, "request-double-switch", "问题", List.of(2L)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode().code())
+                                .isEqualTo("KNOWLEDGE_RELEASE_CHANGING"));
+        assertThat(fixture.embeddingCalls).hasValue(1);
+    }
+
+    @Test
+    void emptyPublishedScopeDoesNotCallModelsOrIndexes() {
+        Fixture fixture = new Fixture();
+        when(fixture.scopeLoader.load(1L, List.of(2L)))
+                .thenReturn(new ActiveReleaseScope(Map.of(), List.of()));
+
+        RetrievalResult result = fixture.service().retrieve(
+                1L, 10567L, "request-empty-scope", "问题", List.of(2L));
+
+        assertThat(result.answerable()).isFalse();
+        assertThat(result.resultCode()).isEqualTo("NO_RELEVANT_EVIDENCE");
+        assertThat(fixture.embeddingCalls).hasValue(0);
+        assertThat(fixture.keyword.searchCalls).isZero();
+        assertThat(fixture.vector.searchCalls).isZero();
+        verify(fixture.validator, never()).validate(anyLong(), any(ActiveReleaseScope.class), anyList());
+    }
+
+    private static ActiveReleaseScope scope(long releaseId, long versionId) {
+        return new ActiveReleaseScope(
+                Map.of(2L, releaseId),
+                List.of(new com.xjjk.knowledge.retrieval.model.DocumentVersionRef(
+                        2L, 3L, versionId)));
+    }
+
     private static RecallCandidate candidate(String id, RecallSource source) {
         return new RecallCandidate(new IndexChunk(
                 id, 1L, 2L, 3L, 4L, 0, "退款规则", "售后", "正文", "hash", "{}"),
@@ -207,12 +285,17 @@ class HybridRetrievalServiceTest {
         private final PublishedVersionValidator validator = mock(PublishedVersionValidator.class);
         private final DraftVersionValidator draftValidator = mock(DraftVersionValidator.class);
         private final SearchLogRecorder searchLogs = mock(SearchLogRecorder.class);
+        private final ActiveReleaseScopeLoader scopeLoader = mock(ActiveReleaseScopeLoader.class);
+        private final ActiveReleaseScope defaultScope = scope(20L, 4L);
+        private final AtomicInteger embeddingCalls = new AtomicInteger();
         private boolean embeddingFailure;
         private boolean budgetExhausted;
         private Reranker reranker = (query, values) -> values;
 
         private Fixture() {
-            when(validator.validate(eq(1L), anyList())).thenAnswer(invocation -> invocation.getArgument(1));
+            when(scopeLoader.load(anyLong(), anyList())).thenReturn(defaultScope);
+            when(validator.validate(eq(1L), any(ActiveReleaseScope.class), anyList()))
+                    .thenAnswer(invocation -> new PublishedScopeValidation(false, invocation.getArgument(2)));
             when(draftValidator.validate(eq(1L), anyList())).thenAnswer(invocation -> invocation.getArgument(1));
         }
 
@@ -220,6 +303,7 @@ class HybridRetrievalServiceTest {
             EmbeddingClient embeddings = new EmbeddingClient() {
                 @Override public List<List<Float>> embedDocuments(List<String> documents) { throw new UnsupportedOperationException(); }
                 @Override public List<Float> embedQuery(String query) {
+                    embeddingCalls.incrementAndGet();
                     if (budgetExhausted) throw new CloudModelBudgetExceededException();
                     if (embeddingFailure) throw new EmbeddingUnavailableException("down");
                     return List.of(1F);
@@ -229,7 +313,7 @@ class HybridRetrievalServiceTest {
             RerankerProperties rerankerProperties = new RerankerProperties();
             return new HybridRetrievalService(
                     embeddings, keyword, vector, new RrfFusion(), reranker, rerankerProperties,
-                    properties, validator, draftValidator, searchLogs,
+                    properties, scopeLoader, validator, draftValidator, searchLogs,
                     new KnowledgeMetrics(new SimpleMeterRegistry()));
         }
     }
@@ -239,11 +323,22 @@ class HybridRetrievalServiceTest {
         private RuntimeException failure;
         private int lastTopK;
         private IndexLayer lastLayer;
+        private int searchCalls;
+        private final java.util.ArrayList<List<com.xjjk.knowledge.retrieval.model.DocumentVersionRef>> scopes =
+                new java.util.ArrayList<>();
         @Override public void ensureReady() {}
         @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks) {}
         @Override public List<RecallCandidate> search(IndexLayer layer, long tenantId, List<Long> ids, String query, int topK) {
+            return search(layer, tenantId, ids, List.of(), query, topK);
+        }
+        @Override public List<RecallCandidate> search(
+                IndexLayer layer, long tenantId, List<Long> ids,
+                List<com.xjjk.knowledge.retrieval.model.DocumentVersionRef> allowedVersions,
+                String query, int topK) {
             lastLayer = layer;
             lastTopK = topK;
+            searchCalls++;
+            scopes.add(List.copyOf(allowedVersions));
             if (failure != null) throw failure;
             return result;
         }
@@ -256,11 +351,22 @@ class HybridRetrievalServiceTest {
         private RuntimeException failure;
         private int lastTopK;
         private IndexLayer lastLayer;
+        private int searchCalls;
+        private final java.util.ArrayList<List<com.xjjk.knowledge.retrieval.model.DocumentVersionRef>> scopes =
+                new java.util.ArrayList<>();
         @Override public void ensureReady() {}
         @Override public void replaceVersion(IndexLayer layer, List<IndexChunk> chunks, List<List<Float>> vectors) {}
         @Override public List<RecallCandidate> search(IndexLayer layer, long tenantId, List<Long> ids, List<Float> vector, int topK) {
+            return search(layer, tenantId, ids, List.of(), vector, topK);
+        }
+        @Override public List<RecallCandidate> search(
+                IndexLayer layer, long tenantId, List<Long> ids,
+                List<com.xjjk.knowledge.retrieval.model.DocumentVersionRef> allowedVersions,
+                List<Float> vector, int topK) {
             lastLayer = layer;
             lastTopK = topK;
+            searchCalls++;
+            scopes.add(List.copyOf(allowedVersions));
             if (failure != null) throw failure;
             return result;
         }
