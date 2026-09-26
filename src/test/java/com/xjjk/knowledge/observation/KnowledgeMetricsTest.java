@@ -21,6 +21,8 @@ class KnowledgeMetricsTest {
         metrics.recordUserMemoryChannel("ES", "AVAILABLE");
         metrics.recordUserMemoryRecall("KEYWORD_ONLY", "OK");
         metrics.recordUserMemoryCandidates("FINAL", 3);
+        metrics.recordReleaseScopeSize(12);
+        metrics.recordReleaseRetry();
 
         assertThat(registry.get("knowledge.retrieval.duration").timer().count())
                 .isEqualTo(1);
@@ -39,6 +41,10 @@ class KnowledgeMetricsTest {
                 .counter().count()).isEqualTo(1);
         assertThat(registry.get("knowledge.user.memory.recall.candidates")
                 .tags("stage", "FINAL").summary().totalAmount()).isEqualTo(3);
+        assertThat(registry.get("knowledge.retrieval.release.scope.versions")
+                .summary().totalAmount()).isEqualTo(12);
+        assertThat(registry.get("knowledge.retrieval.release.retry")
+                .counter().count()).isEqualTo(1);
         registry.getMeters().forEach(meter -> assertThat(
                 meter.getId().getTags().stream().map(tag -> tag.getKey()).toList())
                 .allMatch(Set.of("outcome", "degradation", "stage", "operation",

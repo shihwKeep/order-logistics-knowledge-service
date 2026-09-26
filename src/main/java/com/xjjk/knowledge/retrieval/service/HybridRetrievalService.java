@@ -90,7 +90,7 @@ public class HybridRetrievalService {
         }
         long startedAt = System.nanoTime();
         ActiveReleaseScope scope = layer == IndexLayer.PUBLISHED
-                ? scopeLoader.load(tenantId, knowledgeBaseIds)
+                ? loadPublishedScope(tenantId, knowledgeBaseIds)
                 : null;
         if (scope != null && scope.isEmpty()) {
             return emptyResult(tenantId, userId, requestId, startedAt);
@@ -180,7 +180,8 @@ public class HybridRetrievalService {
                 if (attempt >= 1) {
                     throw new BusinessException(ApiErrorCode.KNOWLEDGE_RELEASE_CHANGING);
                 }
-                ActiveReleaseScope latestScope = scopeLoader.load(tenantId, knowledgeBaseIds);
+                metrics.recordReleaseRetry();
+                ActiveReleaseScope latestScope = loadPublishedScope(tenantId, knowledgeBaseIds);
                 log.info(
                         "knowledge_release_scope_changed requestId={}, previousReleaseCount={}, latestReleaseCount={}",
                         requestId, scope.releaseIds().size(), latestScope.releaseIds().size());
@@ -210,6 +211,12 @@ public class HybridRetrievalService {
                 vectorCandidates.size(), keywordCandidates.size(), fused.size(), evidences.size(), elapsed(startedAt)));
         metrics.recordRetrieval(degradation.name(), resultCode, elapsed(startedAt));
         return result;
+    }
+
+    private ActiveReleaseScope loadPublishedScope(long tenantId, List<Long> knowledgeBaseIds) {
+        ActiveReleaseScope scope = scopeLoader.load(tenantId, knowledgeBaseIds);
+        metrics.recordReleaseScopeSize(scope.versions().size());
+        return scope;
     }
 
     private QueryEmbedding prepareEmbedding(String question) {

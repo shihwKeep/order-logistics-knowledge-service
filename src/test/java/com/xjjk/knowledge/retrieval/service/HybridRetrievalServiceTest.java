@@ -226,6 +226,10 @@ class HybridRetrievalServiceTest {
         assertThat(fixture.vector.scopes).containsExactly(scope20.versions(), scope21.versions());
         assertThat(fixture.embeddingCalls).hasValue(1);
         verify(fixture.scopeLoader, times(2)).load(1L, List.of(2L));
+        assertThat(fixture.registry.get("knowledge.retrieval.release.scope.versions")
+                .summary().count()).isEqualTo(2);
+        assertThat(fixture.registry.get("knowledge.retrieval.release.retry")
+                .counter().count()).isEqualTo(1);
     }
 
     @Test
@@ -288,6 +292,7 @@ class HybridRetrievalServiceTest {
         private final ActiveReleaseScopeLoader scopeLoader = mock(ActiveReleaseScopeLoader.class);
         private final ActiveReleaseScope defaultScope = scope(20L, 4L);
         private final AtomicInteger embeddingCalls = new AtomicInteger();
+        private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
         private boolean embeddingFailure;
         private boolean budgetExhausted;
         private Reranker reranker = (query, values) -> values;
@@ -314,7 +319,7 @@ class HybridRetrievalServiceTest {
             return new HybridRetrievalService(
                     embeddings, keyword, vector, new RrfFusion(), reranker, rerankerProperties,
                     properties, scopeLoader, validator, draftValidator, searchLogs,
-                    new KnowledgeMetrics(new SimpleMeterRegistry()));
+                    new KnowledgeMetrics(registry));
         }
     }
 

@@ -44,6 +44,19 @@ public class KnowledgeMetrics {
                 .record(Duration.ofMillis(Math.max(0, durationMillis)));
     }
 
+    /** 记录一次线上检索快照包含的精确文档版本数，不使用租户或知识库等高基数标签。 */
+    public void recordReleaseScopeSize(int versionCount) {
+        DistributionSummary.builder("knowledge.retrieval.release.scope.versions")
+                .description("Document version count in an active release retrieval scope")
+                .register(registry)
+                .record(Math.max(0, versionCount));
+    }
+
+    /** 记录因发布指针变化触发的整轮检索重试次数。 */
+    public void recordReleaseRetry() {
+        registry.counter("knowledge.retrieval.release.retry").increment();
+    }
+
     public void recordIngestion(String stage, String outcome, long durationMillis) {
         Timer.builder("knowledge.ingestion.duration")
                 .description("Document ingestion task latency and result")
