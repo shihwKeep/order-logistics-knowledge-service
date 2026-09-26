@@ -30,6 +30,8 @@ public class MybatisChunkIndexRepository implements ChunkIndexRepository {
     @Transactional
     public void markReady(
             DocumentVersion version, ReadyIndexMetadata metadata, Long taskId, String leaseToken) {
+        Long previousDraft = mapper.lockCurrentDraft(
+                version.tenantId(), version.knowledgeBaseId(), version.documentId());
         int updated = mapper.markReady(
                 version.tenantId(), version.documentId(), version.id(), version.chunkCount(),
                 version.correctionRevision(),
@@ -41,6 +43,14 @@ public class MybatisChunkIndexRepository implements ChunkIndexRepository {
             }
             throw new IllegalStateException(
                     "文档版本状态、校正修订号或 Chunk 数量已发生变化，拒绝标记 READY");
+        }
+        int promoted = mapper.promoteLatestDraft(
+                version.tenantId(), version.knowledgeBaseId(), version.documentId(),
+                version.id(), version.versionNumber(), version.createdBy());
+        if (promoted == 1 && previousDraft != null && previousDraft != version.id()) {
+            mapper.insertDraftCleanup(
+                    version.tenantId(), version.knowledgeBaseId(), version.documentId(),
+                    previousDraft, "DRAFT_REPLACED");
         }
     }
 }

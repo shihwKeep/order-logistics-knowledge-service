@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.Insert;
 
 import java.util.List;
 
@@ -53,4 +54,60 @@ public interface ChunkIndexMapper {
             @Param("manifestSha256") String manifestSha256,
             @Param("taskId") Long taskId,
             @Param("leaseToken") String leaseToken);
+
+    @Select("""
+            SELECT current_draft_version_id
+              FROM kb_document
+             WHERE tenant_id=#{tenantId} AND knowledge_base_id=#{knowledgeBaseId}
+               AND id=#{documentId} AND is_deleted=0
+             FOR UPDATE
+            """)
+    Long lockCurrentDraft(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("documentId") long documentId);
+
+    @Update("""
+            UPDATE kb_document d
+               SET d.current_draft_version_id=#{versionId},
+                   d.updated_by=#{actorUserId},
+                   d.row_version=d.row_version+1
+             WHERE d.tenant_id=#{tenantId}
+               AND d.knowledge_base_id=#{knowledgeBaseId}
+               AND d.id=#{documentId}
+               AND d.is_deleted=0
+               AND EXISTS (
+                   SELECT 1 FROM kb_document_version current_version
+                    WHERE current_version.tenant_id=d.tenant_id
+                      AND current_version.document_id=d.id
+                      AND current_version.id=#{versionId}
+                      AND current_version.version_number=#{versionNumber}
+                      AND current_version.status='READY')
+               AND NOT EXISTS (
+                   SELECT 1 FROM kb_document_version newer
+                    WHERE newer.tenant_id=d.tenant_id
+                      AND newer.document_id=d.id
+                      AND newer.version_number>#{versionNumber}
+                      AND newer.status<>'FAILED')
+            """)
+    int promoteLatestDraft(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("versionNumber") int versionNumber,
+            @Param("actorUserId") long actorUserId);
+
+    @Insert("""
+            INSERT IGNORE INTO kb_derived_index_cleanup
+              (tenant_id,knowledge_base_id,document_id,version_id,index_layer,cleanup_reason,status)
+            VALUES
+              (#{tenantId},#{knowledgeBaseId},#{documentId},#{versionId},'DRAFT',#{reason},'PENDING')
+            """)
+    int insertDraftCleanup(
+            @Param("tenantId") long tenantId,
+            @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("reason") String reason);
 }
