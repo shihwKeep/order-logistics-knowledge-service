@@ -9,7 +9,7 @@ public record DocumentResponse(
         long tenantId,
         long knowledgeBaseId,
         String title,
-        DocumentVersionResponse currentDraftVersion,
+        DocumentVersionResponse createdVersion,
         Long currentPublishedVersionId,
         int rowVersion,
         LocalDateTime createdAt,

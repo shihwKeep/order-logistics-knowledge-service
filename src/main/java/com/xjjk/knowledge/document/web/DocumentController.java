@@ -215,7 +215,7 @@ public class DocumentController {
             HttpServletResponse response) {
         String requestId = prepareRequestId(request, response);
         try {
-            return ApiResponse.success(DocumentResponse.from(uploadService.upload(
+            return ApiResponse.success(DocumentResponse.from(uploadService.uploadNewDocument(
                     principal(authentication),
                     tenantId,
                     knowledgeBaseId,
@@ -224,6 +224,25 @@ public class DocumentController {
                     file.getContentType(),
                     file.getBytes(),
                     requestId)));
+        } catch (IOException exception) {
+            throw new BusinessException(ApiErrorCode.DOCUMENT_STORAGE_UNAVAILABLE, exception);
+        }
+    }
+
+    @PostMapping(value = "/{documentId}/versions", consumes = "multipart/form-data")
+    public ApiResponse<DocumentResponse> uploadVersion(
+            @PathVariable @Positive long tenantId,
+            @PathVariable @Positive long knowledgeBaseId,
+            @PathVariable @Positive long documentId,
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        String requestId = prepareRequestId(request, response);
+        try {
+            return ApiResponse.success(DocumentResponse.from(uploadService.uploadNewVersion(
+                    principal(authentication), tenantId, knowledgeBaseId, documentId,
+                    file.getOriginalFilename(), file.getContentType(), file.getBytes(), requestId)));
         } catch (IOException exception) {
             throw new BusinessException(ApiErrorCode.DOCUMENT_STORAGE_UNAVAILABLE, exception);
         }

@@ -46,7 +46,7 @@ public class DocumentUploadService {
      * 极少数“对象写入成功但数据库提交失败”的孤儿对象由后续生命周期扫描清理。
      */
     @Transactional
-    public CreatedDocument upload(
+    public CreatedDocument uploadNewDocument(
             AdminPrincipal principal,
             long tenantId,
             long knowledgeBaseId,
@@ -65,8 +65,14 @@ public class DocumentUploadService {
                 validated.size(),
                 validated.sha256());
 
-        CreatedDocument created = repository.createDraft(
-                tenantId, knowledgeBaseId, principal.userId(), title, source);
+        var duplicate = repository.findByUploadRequest(tenantId, requestId);
+        if (duplicate.isPresent()) {
+            return requireMatchingDuplicate(
+                    duplicate.get(), knowledgeBaseId, null, title, source);
+        }
+
+        CreatedDocument created = repository.createDocument(
+                tenantId, knowledgeBaseId, principal.userId(), title, source, requestId);
         objectStore.put(
                 created.version().sourceObjectKey(),
                 new ByteArrayInputStream(content),
@@ -81,6 +87,78 @@ public class DocumentUploadService {
                 requestId,
                 Map.of("documentTitle", title, "versionId", created.version().id()));
         return created;
+    }
+
+    @Transactional
+    public CreatedDocument uploadNewVersion(
+            AdminPrincipal principal,
+            long tenantId,
+            long knowledgeBaseId,
+            long documentId,
+            String originalFilename,
+            String declaredMimeType,
+            byte[] content,
+            String requestId) {
+        knowledgeBaseService.get(principal, tenantId, knowledgeBaseId);
+        ValidatedUpload validated = uploadPolicy.validate(originalFilename, declaredMimeType, content);
+        SourceFile source = new SourceFile(
+                validated.originalFilename(), validated.extension(), validated.mimeType(),
+                validated.size(), validated.sha256());
+
+        var duplicate = repository.findByUploadRequest(tenantId, requestId);
+        if (duplicate.isPresent()) {
+            return requireMatchingDuplicate(
+                    duplicate.get(), knowledgeBaseId, documentId, null, source);
+        }
+
+        CreatedDocument created = repository.createVersion(
+                tenantId, knowledgeBaseId, documentId, principal.userId(), source, requestId);
+        objectStore.put(
+                created.version().sourceObjectKey(),
+                new ByteArrayInputStream(content),
+                content.length,
+                validated.mimeType());
+        auditService.success(
+                tenantId,
+                principal,
+                AuditAction.DOCUMENT_UPLOAD,
+                "DOCUMENT_VERSION",
+                Long.toString(created.version().id()),
+                requestId,
+                Map.of("documentId", documentId, "versionId", created.version().id()));
+        return created;
+    }
+
+    /** 保留旧方法作为内部兼容入口，新代码应明确调用 uploadNewDocument。 */
+    public CreatedDocument upload(
+            AdminPrincipal principal,
+            long tenantId,
+            long knowledgeBaseId,
+            String requestedTitle,
+            String originalFilename,
+            String declaredMimeType,
+            byte[] content,
+            String requestId) {
+        return uploadNewDocument(
+                principal, tenantId, knowledgeBaseId, requestedTitle,
+                originalFilename, declaredMimeType, content, requestId);
+    }
+
+    private CreatedDocument requireMatchingDuplicate(
+            CreatedDocument duplicate,
+            long knowledgeBaseId,
+            Long documentId,
+            String title,
+            SourceFile source) {
+        boolean sameTarget = duplicate.document().knowledgeBaseId() == knowledgeBaseId
+                && (documentId == null
+                    ? title.equals(duplicate.document().title())
+                    : documentId == duplicate.document().id())
+                && source.sha256().equals(duplicate.version().sourceSha256());
+        if (!sameTarget) {
+            throw new BusinessException(ApiErrorCode.IDEMPOTENCY_KEY_REUSED);
+        }
+        return duplicate;
     }
 
     private String normalizeTitle(String requestedTitle, String filename) {

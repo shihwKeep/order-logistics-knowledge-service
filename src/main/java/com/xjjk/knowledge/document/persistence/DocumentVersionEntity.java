@@ -14,6 +14,7 @@ public class DocumentVersionEntity {
     private String mimeType;
     private Long fileSize;
     private String sourceSha256;
+    private String uploadRequestId;
     private String sourceObjectKey;
     private String parsedObjectKey;
     private String parserVersion;
@@ -56,6 +57,8 @@ public class DocumentVersionEntity {
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
     public String getSourceSha256() { return sourceSha256; }
     public void setSourceSha256(String sourceSha256) { this.sourceSha256 = sourceSha256; }
+    public String getUploadRequestId() { return uploadRequestId; }
+    public void setUploadRequestId(String uploadRequestId) { this.uploadRequestId = uploadRequestId; }
     public String getSourceObjectKey() { return sourceObjectKey; }
     public void setSourceObjectKey(String sourceObjectKey) { this.sourceObjectKey = sourceObjectKey; }
     public String getParsedObjectKey() { return parsedObjectKey; }

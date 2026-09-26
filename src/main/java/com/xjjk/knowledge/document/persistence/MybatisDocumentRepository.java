@@ -5,6 +5,9 @@ import com.xjjk.knowledge.document.domain.DocumentStatus;
 import com.xjjk.knowledge.document.domain.DocumentVersion;
 import com.xjjk.knowledge.document.domain.KnowledgeDocument;
 import com.xjjk.knowledge.document.domain.SourceFile;
+import com.xjjk.knowledge.common.api.ApiErrorCode;
+import com.xjjk.knowledge.common.error.BusinessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +30,18 @@ public class MybatisDocumentRepository implements DocumentRepository {
      */
     @Override
     @Transactional
-    public CreatedDocument createDraft(
+    public CreatedDocument createDocument(
             long tenantId,
             long knowledgeBaseId,
             long actorUserId,
             String title,
-            SourceFile source) {
+            SourceFile source,
+            String requestId) {
+        CreatedDocument duplicate = duplicateRequest(
+                tenantId, knowledgeBaseId, null, title, source, requestId);
+        if (duplicate != null) {
+            return duplicate;
+        }
         DocumentEntity document = new DocumentEntity();
         document.setTenantId(tenantId);
         document.setKnowledgeBaseId(knowledgeBaseId);
@@ -54,27 +63,24 @@ public class MybatisDocumentRepository implements DocumentRepository {
         version.setSourceSha256(source.sha256());
         version.setSourceObjectKey("pending");
         version.setCreatedBy(actorUserId);
-        mapper.insertVersion(version);
+        version.setUploadRequestId(requestId);
+        try {
+            mapper.insertVersion(version);
+        } catch (DuplicateKeyException duplicateKey) {
+            mapper.deleteEmptyDocument(tenantId, document.getId());
+            CreatedDocument concurrent = duplicateRequest(
+                    tenantId, knowledgeBaseId, null, title, source, requestId);
+            if (concurrent != null) {
+                return concurrent;
+            }
+            throw duplicateKey;
+        }
 
         String objectKey = sourceObjectKey(
                 tenantId, knowledgeBaseId, document.getId(), version.getId());
         mapper.updateSourceObjectKey(
                 tenantId, document.getId(), version.getId(), objectKey);
-        mapper.updateDraftPointer(
-                tenantId, document.getId(), version.getId(), actorUserId);
-        mapper.insertInitialTask(
-                tenantId,
-                knowledgeBaseId,
-                document.getId(),
-                version.getId(),
-                "PARSE:" + tenantId + ":" + version.getId());
-        mapper.insertInitialOutbox(
-                UUID.randomUUID().toString(),
-                tenantId,
-                Long.toString(version.getId()),
-                "{\"tenantId\":" + tenantId
-                        + ",\"documentId\":" + document.getId()
-                        + ",\"versionId\":" + version.getId() + "}");
+        enqueue(tenantId, knowledgeBaseId, document.getId(), version.getId());
 
         return new CreatedDocument(
                 requireDocument(tenantId, document.getId()),
@@ -82,8 +88,116 @@ public class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
+    @Transactional
+    public CreatedDocument createVersion(
+            long tenantId,
+            long knowledgeBaseId,
+            long documentId,
+            long actorUserId,
+            SourceFile source,
+            String requestId) {
+        CreatedDocument duplicate = duplicateRequest(
+                tenantId, knowledgeBaseId, documentId, null, source, requestId);
+        if (duplicate != null) {
+            return duplicate;
+        }
+        DocumentEntity document = mapper.lockDocument(tenantId, knowledgeBaseId, documentId);
+        if (document == null) {
+            throw new BusinessException(ApiErrorCode.DOCUMENT_NOT_FOUND);
+        }
+        duplicate = duplicateRequest(tenantId, knowledgeBaseId, documentId, null, source, requestId);
+        if (duplicate != null) {
+            return duplicate;
+        }
+        if (mapper.findVersionByContent(tenantId, documentId, source.sha256()) != null) {
+            throw new BusinessException(ApiErrorCode.DOCUMENT_CONTENT_UNCHANGED);
+        }
+
+        DocumentVersionEntity version = newVersion(
+                tenantId, knowledgeBaseId, documentId, mapper.nextVersionNumber(tenantId, documentId),
+                actorUserId, source, requestId);
+        try {
+            mapper.insertVersion(version);
+        } catch (DuplicateKeyException duplicateKey) {
+            CreatedDocument concurrent = duplicateRequest(
+                    tenantId, knowledgeBaseId, documentId, null, source, requestId);
+            if (concurrent != null) {
+                return concurrent;
+            }
+            throw duplicateKey;
+        }
+        String objectKey = sourceObjectKey(tenantId, knowledgeBaseId, documentId, version.getId());
+        mapper.updateSourceObjectKey(tenantId, documentId, version.getId(), objectKey);
+        enqueue(tenantId, knowledgeBaseId, documentId, version.getId());
+        return new CreatedDocument(
+                requireDocument(tenantId, documentId),
+                requireVersion(tenantId, documentId, version.getId()));
+    }
+
+    private DocumentVersionEntity newVersion(
+            long tenantId, long knowledgeBaseId, long documentId, int versionNumber,
+            long actorUserId, SourceFile source, String requestId) {
+        DocumentVersionEntity version = new DocumentVersionEntity();
+        version.setTenantId(tenantId);
+        version.setKnowledgeBaseId(knowledgeBaseId);
+        version.setDocumentId(documentId);
+        version.setVersionNumber(versionNumber);
+        version.setStatus(DocumentStatus.UPLOADED.name());
+        version.setOriginalFilename(source.originalFilename());
+        version.setFileExtension(source.extension());
+        version.setMimeType(source.mimeType());
+        version.setFileSize(source.size());
+        version.setSourceSha256(source.sha256());
+        version.setUploadRequestId(requestId);
+        version.setSourceObjectKey("pending");
+        version.setCreatedBy(actorUserId);
+        return version;
+    }
+
+    private CreatedDocument duplicateRequest(
+            long tenantId, long knowledgeBaseId, Long documentId, String title,
+            SourceFile source, String requestId) {
+        DocumentVersionEntity existing = mapper.findVersionByUploadRequest(tenantId, requestId);
+        if (existing == null) {
+            return null;
+        }
+        DocumentEntity document = mapper.findDocument(tenantId, existing.getDocumentId());
+        boolean sameTarget = document != null
+                && existing.getKnowledgeBaseId() == knowledgeBaseId
+                && (documentId == null ? title.equals(document.getTitle()) : documentId.equals(existing.getDocumentId()))
+                && source.sha256().equals(existing.getSourceSha256());
+        if (!sameTarget) {
+            throw new BusinessException(ApiErrorCode.IDEMPOTENCY_KEY_REUSED);
+        }
+        return new CreatedDocument(toDomain(document), toDomain(existing));
+    }
+
+    private void enqueue(long tenantId, long knowledgeBaseId, long documentId, long versionId) {
+        mapper.insertInitialTask(
+                tenantId, knowledgeBaseId, documentId, versionId,
+                "PARSE:" + tenantId + ":" + versionId);
+        mapper.insertInitialOutbox(
+                UUID.randomUUID().toString(), tenantId, Long.toString(versionId),
+                "{\"tenantId\":" + tenantId
+                        + ",\"documentId\":" + documentId
+                        + ",\"versionId\":" + versionId + "}");
+    }
+
+    @Override
     public Optional<KnowledgeDocument> findDocument(long tenantId, long documentId) {
         return Optional.ofNullable(mapper.findDocument(tenantId, documentId)).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<CreatedDocument> findByUploadRequest(long tenantId, String requestId) {
+        DocumentVersionEntity version = mapper.findVersionByUploadRequest(tenantId, requestId);
+        if (version == null) {
+            return Optional.empty();
+        }
+        DocumentEntity document = mapper.findDocument(tenantId, version.getDocumentId());
+        return document == null
+                ? Optional.empty()
+                : Optional.of(new CreatedDocument(toDomain(document), toDomain(version)));
     }
 
     @Override

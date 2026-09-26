@@ -59,7 +59,7 @@ class DocumentControllerTest {
     @Test
     void uploadsMultipartFileAndReturnsDraftVersion() throws Exception {
         CreatedDocument created = createdDocument();
-        when(service.upload(
+        when(service.uploadNewDocument(
                 any(AdminPrincipal.class), eq(1L), eq(10L), eq("退款政策"),
                 eq("refund.pdf"), eq("application/pdf"), any(byte[].class), eq("req-upload")))
                 .thenReturn(created);
@@ -75,8 +75,29 @@ class DocumentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-Id", "req-upload"))
                 .andExpect(jsonPath("$.data.id").value(13))
-                .andExpect(jsonPath("$.data.currentDraftVersion.id").value(21))
-                .andExpect(jsonPath("$.data.currentDraftVersion.status").value("UPLOADED"));
+                .andExpect(jsonPath("$.data.createdVersion.id").value(21))
+                .andExpect(jsonPath("$.data.createdVersion.status").value("UPLOADED"));
+    }
+
+    @Test
+    void uploadsNewVersionToExplicitDocument() throws Exception {
+        CreatedDocument created = createdDocument();
+        when(service.uploadNewVersion(
+                any(AdminPrincipal.class), eq(1L), eq(10L), eq(13L),
+                eq("refund-v2.pdf"), eq("application/pdf"), any(byte[].class), eq("req-v2")))
+                .thenReturn(created);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "refund-v2.pdf", "application/pdf",
+                "%PDF-1.7\nsecond".getBytes(StandardCharsets.US_ASCII));
+
+        mvc.perform(multipart("/api/v1/admin/tenants/1/knowledge-bases/10/documents/13/versions")
+                        .file(file)
+                        .principal(authentication)
+                        .header("X-Request-Id", "req-v2"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", "req-v2"))
+                .andExpect(jsonPath("$.data.id").value(13))
+                .andExpect(jsonPath("$.data.createdVersion.id").value(21));
     }
 
     @Test
@@ -133,8 +154,8 @@ class DocumentControllerTest {
     private CreatedDocument createdDocument() {
         LocalDateTime now = LocalDateTime.of(2026, 9, 9, 19, 0);
         KnowledgeDocument document = new KnowledgeDocument(
-                13L, 1L, 10L, "退款政策", 21L, null,
-                10567L, 10567L, 1, now, now);
+                13L, 1L, 10L, "退款政策", null, null,
+                10567L, 10567L, 0, now, now);
         DocumentVersion version = new DocumentVersion(
                 21L, 1L, 10L, 13L, 1, DocumentStatus.UPLOADED,
                 "refund.pdf", "pdf", "application/pdf", 16L,

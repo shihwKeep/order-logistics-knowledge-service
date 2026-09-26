@@ -7,10 +7,21 @@ import com.xjjk.knowledge.document.domain.SourceFile;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface DocumentRepository {
-    CreatedDocument createDraft(long tenantId, long knowledgeBaseId, long actorUserId,
-                                String title, SourceFile source);
+    CreatedDocument createDocument(long tenantId, long knowledgeBaseId, long actorUserId,
+                                   String title, SourceFile source, String requestId);
+
+    CreatedDocument createVersion(long tenantId, long knowledgeBaseId, long documentId,
+                                  long actorUserId, SourceFile source, String requestId);
+
+    Optional<CreatedDocument> findByUploadRequest(long tenantId, String requestId);
+
+    default CreatedDocument createDraft(long tenantId, long knowledgeBaseId, long actorUserId,
+                                        String title, SourceFile source) {
+        return createDocument(tenantId, knowledgeBaseId, actorUserId, title, source, UUID.randomUUID().toString());
+    }
 
     Optional<KnowledgeDocument> findDocument(long tenantId, long documentId);
 
