@@ -6,6 +6,8 @@ import com.xjjk.knowledge.retrieval.model.IndexChunk;
 import com.xjjk.knowledge.retrieval.model.IndexLayer;
 import com.xjjk.knowledge.retrieval.model.RecallCandidate;
 import com.xjjk.knowledge.retrieval.model.RecallSource;
+import com.xjjk.knowledge.retrieval.model.DocumentVersionRef;
+import com.xjjk.knowledge.retrieval.service.RetrievalProperties;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -15,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,12 +26,16 @@ import java.util.Map;
 @Component
 public class ElasticsearchKeywordIndex implements KeywordIndex {
     private final ElasticsearchProperties properties;
+    private final RetrievalProperties retrievalProperties;
     private final HttpClient client;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final String baseUrl;
 
-    public ElasticsearchKeywordIndex(ElasticsearchProperties properties) {
+    public ElasticsearchKeywordIndex(
+            ElasticsearchProperties properties,
+            RetrievalProperties retrievalProperties) {
         this.properties = properties;
+        this.retrievalProperties = retrievalProperties;
         this.client = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.getConnectTimeout())
@@ -73,13 +80,61 @@ public class ElasticsearchKeywordIndex implements KeywordIndex {
     @Override
     public List<RecallCandidate> search(
             IndexLayer layer, long tenantId, List<Long> knowledgeBaseIds, String query, int topK) {
+        return search(layer, tenantId, knowledgeBaseIds, List.of(), query, topK);
+    }
+
+    @Override
+    public List<RecallCandidate> search(
+            IndexLayer layer,
+            long tenantId,
+            List<Long> knowledgeBaseIds,
+            List<DocumentVersionRef> allowedVersions,
+            String query,
+            int topK) {
         if (query == null || query.isBlank() || topK <= 0) {
             throw new IllegalArgumentException("检索问题不能为空且 topK 必须大于 0");
         }
+        List<DocumentVersionRef> versions = allowedVersions == null ? List.of() : allowedVersions;
+        if (versions.isEmpty()) {
+            return searchBatch(layer, tenantId, knowledgeBaseIds, List.of(), query, topK);
+        }
+        Map<String, RecallCandidate> merged = new LinkedHashMap<>();
+        int batchSize = retrievalProperties.getReleaseFilterBatchSize();
+        for (int offset = 0; offset < versions.size(); offset += batchSize) {
+            List<DocumentVersionRef> batch = versions.subList(
+                    offset, Math.min(offset + batchSize, versions.size()));
+            for (RecallCandidate candidate : searchBatch(
+                    layer, tenantId, knowledgeBaseIds, batch, query, topK)) {
+                merged.merge(candidate.chunk().chunkId(), candidate,
+                        (left, right) -> right.score() > left.score() ? right : left);
+            }
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparingDouble(RecallCandidate::score).reversed()
+                        .thenComparing(candidate -> candidate.chunk().chunkId()))
+                .limit(topK)
+                .toList();
+    }
+
+    private List<RecallCandidate> searchBatch(
+            IndexLayer layer,
+            long tenantId,
+            List<Long> knowledgeBaseIds,
+            List<DocumentVersionRef> allowedVersions,
+            String query,
+            int topK) {
         List<Map<String, Object>> filters = new ArrayList<>();
         filters.add(Map.of("term", Map.of("tenantId", tenantId)));
         if (knowledgeBaseIds != null && !knowledgeBaseIds.isEmpty()) {
             filters.add(Map.of("terms", Map.of("knowledgeBaseId", knowledgeBaseIds)));
+        }
+        if (!allowedVersions.isEmpty()) {
+            List<Map<String, Object>> versionPairs = allowedVersions.stream()
+                    .map(this::versionPairFilter)
+                    .toList();
+            filters.add(Map.of("bool", Map.of(
+                    "should", versionPairs,
+                    "minimum_should_match", 1)));
         }
         Map<String, Object> body = Map.of(
                 "size", topK,
@@ -96,6 +151,13 @@ public class ElasticsearchKeywordIndex implements KeywordIndex {
                     hit.path("_score").asDouble(), RecallSource.KEYWORD));
         }
         return List.copyOf(candidates);
+    }
+
+    private Map<String, Object> versionPairFilter(DocumentVersionRef version) {
+        return Map.of("bool", Map.of("filter", List.of(
+                Map.of("term", Map.of("knowledgeBaseId", version.knowledgeBaseId())),
+                Map.of("term", Map.of("documentId", version.documentId())),
+                Map.of("term", Map.of("versionId", version.versionId())))));
     }
 
     @Override

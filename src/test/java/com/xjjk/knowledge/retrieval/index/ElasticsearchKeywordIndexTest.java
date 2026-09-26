@@ -3,16 +3,74 @@ package com.xjjk.knowledge.retrieval.index;
 import com.sun.net.httpserver.HttpServer;
 import com.xjjk.knowledge.retrieval.model.IndexChunk;
 import com.xjjk.knowledge.retrieval.model.IndexLayer;
+import com.xjjk.knowledge.retrieval.model.DocumentVersionRef;
+import com.xjjk.knowledge.retrieval.service.RetrievalProperties;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ElasticsearchKeywordIndexTest {
+
+    @Test
+    void filtersPublishedSearchByExactVersionPairsAndMergesBatches() throws Exception {
+        List<String> requests = new CopyOnWriteArrayList<>();
+        AtomicInteger searchCalls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            requests.add(exchange.getRequestMethod() + " " + exchange.getRequestURI() + "\n" + body);
+            int call = searchCalls.incrementAndGet();
+            String json = call == 1
+                    ? searchHits(hit("shared", 0.70D, 3L, 11L), hit("first", 0.60D, 4L, 12L))
+                    : searchHits(hit("shared", 0.95D, 3L, 11L), hit("second", 0.80D, 5L, 13L));
+            byte[] response = json.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            ElasticsearchProperties elasticsearch = new ElasticsearchProperties();
+            elasticsearch.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+            RetrievalProperties retrieval = new RetrievalProperties();
+            retrieval.setReleaseFilterBatchSize(2);
+            ElasticsearchKeywordIndex index = new ElasticsearchKeywordIndex(elasticsearch, retrieval);
+            List<DocumentVersionRef> versions = List.of(
+                    new DocumentVersionRef(2L, 3L, 11L),
+                    new DocumentVersionRef(2L, 4L, 12L),
+                    new DocumentVersionRef(2L, 5L, 13L));
+
+            var hits = index.search(
+                    IndexLayer.PUBLISHED, 1L, List.of(2L), versions, "退款期限", 2);
+
+            assertThat(hits).extracting(hit -> hit.chunk().chunkId())
+                    .containsExactly("shared", "second");
+            assertThat(hits).extracting(hit -> hit.score()).containsExactly(0.95D, 0.80D);
+            assertThat(requests).hasSize(2);
+            assertThat(requests.getFirst())
+                    .contains("\"tenantId\":1")
+                    .contains("\"knowledgeBaseId\"")
+                    .contains("\"minimum_should_match\":1")
+                    .contains("\"documentId\":3")
+                    .contains("\"versionId\":11")
+                    .contains("\"documentId\":4")
+                    .contains("\"versionId\":12")
+                    .doesNotContain("\"documentId\":[3,4]")
+                    .doesNotContain("\"versionId\":[11,12]");
+            assertThat(requests.get(1))
+                    .contains("\"documentId\":5")
+                    .contains("\"versionId\":13");
+        } finally {
+            server.stop(0);
+        }
+    }
 
     @Test
     void createsIkIndexesAndUsesStableBulkIdsAndTenantFilter() throws Exception {
@@ -52,7 +110,8 @@ class ElasticsearchKeywordIndexTest {
         try {
             ElasticsearchProperties properties = new ElasticsearchProperties();
             properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
-            ElasticsearchKeywordIndex index = new ElasticsearchKeywordIndex(properties);
+            ElasticsearchKeywordIndex index = new ElasticsearchKeywordIndex(
+                    properties, new RetrievalProperties());
             IndexChunk chunk = new IndexChunk(
                     "1-3-4-0", 1L, 2L, 3L, 4L, 0, "退款规则", "退款规范 > 5 优惠处理",
                     "签收后七日内可申请退款", "abc", "{\"pageNumber\":3}");
@@ -83,5 +142,17 @@ class ElasticsearchKeywordIndexTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    private static String searchHits(String... hits) {
+        return "{\"hits\":{\"hits\":[" + String.join(",", hits) + "]}}";
+    }
+
+    private static String hit(String chunkId, double score, long documentId, long versionId) {
+        return "{\"_score\":" + score + ",\"_source\":{" +
+                "\"chunkId\":\"" + chunkId + "\",\"tenantId\":1,\"knowledgeBaseId\":2," +
+                "\"documentId\":" + documentId + ",\"versionId\":" + versionId + "," +
+                "\"chunkIndex\":0,\"documentTitle\":\"退款规则\",\"titlePath\":\"售后\"," +
+                "\"content\":\"正文\",\"contentSha256\":\"abc\",\"locationJson\":\"{}\"}}";
     }
 }
