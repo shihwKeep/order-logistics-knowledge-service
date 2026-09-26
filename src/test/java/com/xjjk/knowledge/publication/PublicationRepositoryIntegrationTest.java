@@ -45,19 +45,21 @@ class PublicationRepositoryIntegrationTest {
                         INSERT INTO kb_document_version
                           (id,tenant_id,knowledge_base_id,document_id,version_number,status,original_filename,
                            file_extension,mime_type,file_size,source_sha256,source_object_key,embedding_model,
+                           upload_request_id,
                            embedding_dimension,embedding_instruction_version,index_manifest_sha256,indexed_at,
                            unit_count,chunk_count,created_by)
                         VALUES(4,1,2,3,1,'READY','refund.txt','txt','text/plain',10,
-                           REPEAT('a',64),'key','qwen',2560,'instruction',REPEAT('b',64),CURRENT_TIMESTAMP(3),1,1,10567)
+                           REPEAT('a',64),'key','qwen','upload-4',2560,'instruction',REPEAT('b',64),CURRENT_TIMESTAMP(3),1,1,10567)
                         """);
                 statement.executeUpdate("""
                         INSERT INTO kb_document_version
                           (id,tenant_id,knowledge_base_id,document_id,version_number,status,original_filename,
                            file_extension,mime_type,file_size,source_sha256,source_object_key,embedding_model,
+                           upload_request_id,
                            embedding_dimension,embedding_instruction_version,index_manifest_sha256,indexed_at,
                            unit_count,chunk_count,created_by)
                         VALUES(5,1,2,3,2,'READY','refund-v2.txt','txt','text/plain',11,
-                           REPEAT('c',64),'key-v2','qwen',2560,'instruction',REPEAT('d',64),CURRENT_TIMESTAMP(3),1,1,10567)
+                           REPEAT('c',64),'key-v2','qwen','upload-5',2560,'instruction',REPEAT('d',64),CURRENT_TIMESTAMP(3),1,1,10567)
                         """);
             }
             PublicationMapper mapper = session.getMapper(PublicationMapper.class);

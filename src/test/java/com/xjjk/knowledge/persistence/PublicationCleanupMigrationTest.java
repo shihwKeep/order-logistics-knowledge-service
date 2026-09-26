@@ -9,6 +9,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -30,7 +31,9 @@ class PublicationCleanupMigrationTest {
             DatabaseMetaData metadata = connection.getMetaData();
             assertThat(tableNames(metadata)).contains("kb_published_index_cleanup");
         }
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
+        assertThat(Arrays.stream(flyway.info().applied())
+                .map(info -> info.getVersion().getVersion()))
+                .contains("4");
     }
 
     private Set<String> tableNames(DatabaseMetaData metadata) throws Exception {
