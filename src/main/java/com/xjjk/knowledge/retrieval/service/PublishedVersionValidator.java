@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 返回证据前以 MySQL 当前 ACTIVE Release 清单进行最后一次批量校验，
@@ -42,5 +43,36 @@ public class PublishedVersionValidator {
                 .filter(candidate -> valid.contains(
                         candidate.chunk().documentId() + ":" + candidate.chunk().versionId()))
                 .toList();
+    }
+
+    public PublishedScopeValidation validate(
+            long tenantId,
+            ActiveReleaseScope scope,
+            List<RankedEvidence> candidates) {
+        if (scope == null || scope.releaseIds().isEmpty()) {
+            return new PublishedScopeValidation(false, List.of());
+        }
+        Map<Long, Long> currentReleaseIds = mapper.findCurrentReleases(
+                        tenantId, List.copyOf(scope.releaseIds().keySet())).stream()
+                .collect(Collectors.toMap(
+                        PublishedVersionMapper.CurrentReleaseRow::knowledgeBaseId,
+                        PublishedVersionMapper.CurrentReleaseRow::releaseId));
+        if (!currentReleaseIds.equals(scope.releaseIds())) {
+            return new PublishedScopeValidation(true, List.of());
+        }
+        if (candidates == null || candidates.isEmpty()) {
+            return new PublishedScopeValidation(false, List.of());
+        }
+        Set<String> allowed = scope.versions().stream()
+                .map(reference -> reference.key())
+                .collect(Collectors.toUnmodifiableSet());
+        List<RankedEvidence> evidences = candidates.stream()
+                .filter(candidate -> candidate.chunk().tenantId() == tenantId)
+                .filter(candidate -> allowed.contains(
+                        candidate.chunk().knowledgeBaseId() + ":"
+                                + candidate.chunk().documentId() + ":"
+                                + candidate.chunk().versionId()))
+                .toList();
+        return new PublishedScopeValidation(false, evidences);
     }
 }
