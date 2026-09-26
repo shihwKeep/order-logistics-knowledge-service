@@ -4,20 +4,30 @@ import com.xjjk.knowledge.retrieval.model.IndexChunk;
 import com.xjjk.knowledge.retrieval.model.IndexLayer;
 import com.xjjk.knowledge.retrieval.model.RecallCandidate;
 import com.xjjk.knowledge.retrieval.model.RecallSource;
+import com.xjjk.knowledge.retrieval.model.DocumentVersionRef;
+import com.xjjk.knowledge.retrieval.service.RetrievalProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** 2560 维 Milvus 向量索引；Collection 维度漂移时立即拒绝使用。 */
 @Component
 public class MilvusVectorIndex implements VectorIndex {
     private final MilvusGateway gateway;
     private final MilvusProperties properties;
+    private final RetrievalProperties retrievalProperties;
 
-    public MilvusVectorIndex(MilvusGateway gateway, MilvusProperties properties) {
+    public MilvusVectorIndex(
+            MilvusGateway gateway,
+            MilvusProperties properties,
+            RetrievalProperties retrievalProperties) {
         this.gateway = gateway;
         this.properties = properties;
+        this.retrievalProperties = retrievalProperties;
     }
 
     @Override
@@ -52,16 +62,69 @@ public class MilvusVectorIndex implements VectorIndex {
     @Override
     public List<RecallCandidate> search(
             IndexLayer layer, long tenantId, List<Long> knowledgeBaseIds, List<Float> vector, int topK) {
+        return search(layer, tenantId, knowledgeBaseIds, List.of(), vector, topK);
+    }
+
+    @Override
+    public List<RecallCandidate> search(
+            IndexLayer layer,
+            long tenantId,
+            List<Long> knowledgeBaseIds,
+            List<DocumentVersionRef> allowedVersions,
+            List<Float> vector,
+            int topK) {
         validateVector(vector);
+        List<DocumentVersionRef> versions = allowedVersions == null ? List.of() : allowedVersions;
+        if (versions.isEmpty()) {
+            return searchBatch(layer, tenantId, knowledgeBaseIds, List.of(), vector, topK);
+        }
+        Map<String, RecallCandidate> merged = new LinkedHashMap<>();
+        int batchSize = retrievalProperties.getReleaseFilterBatchSize();
+        for (int offset = 0; offset < versions.size(); offset += batchSize) {
+            List<DocumentVersionRef> batch = versions.subList(
+                    offset, Math.min(offset + batchSize, versions.size()));
+            for (RecallCandidate candidate : searchBatch(
+                    layer, tenantId, knowledgeBaseIds, batch, vector, topK)) {
+                merged.merge(candidate.chunk().chunkId(), candidate,
+                        (left, right) -> right.score() > left.score() ? right : left);
+            }
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparingDouble(RecallCandidate::score).reversed()
+                        .thenComparing(candidate -> candidate.chunk().chunkId()))
+                .limit(topK)
+                .toList();
+    }
+
+    private List<RecallCandidate> searchBatch(
+            IndexLayer layer,
+            long tenantId,
+            List<Long> knowledgeBaseIds,
+            List<DocumentVersionRef> allowedVersions,
+            List<Float> vector,
+            int topK) {
         StringBuilder filter = new StringBuilder("tenant_id == ").append(tenantId);
         if (knowledgeBaseIds != null && !knowledgeBaseIds.isEmpty()) {
             filter.append(" && knowledge_base_id in [")
                     .append(String.join(",", knowledgeBaseIds.stream().map(String::valueOf).toList()))
                     .append(']');
         }
+        if (!allowedVersions.isEmpty()) {
+            filter.append(" && (")
+                    .append(String.join(" || ", allowedVersions.stream()
+                            .map(this::versionPairFilter)
+                            .toList()))
+                    .append(')');
+        }
         return gateway.search(properties.collectionName(layer), filter.toString(), vector, topK).stream()
                 .map(match -> new RecallCandidate(match.chunk(), match.score(), RecallSource.VECTOR))
                 .toList();
+    }
+
+    private String versionPairFilter(DocumentVersionRef version) {
+        return "(knowledge_base_id == " + version.knowledgeBaseId()
+                + " && document_id == " + version.documentId()
+                + " && version_id == " + version.versionId() + ")";
     }
 
     @Override
