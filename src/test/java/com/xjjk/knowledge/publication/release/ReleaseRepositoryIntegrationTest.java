@@ -2,6 +2,7 @@ package com.xjjk.knowledge.publication.release;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.xjjk.knowledge.document.task.OutboxMapper;
 import java.sql.Statement;
 import java.util.List;
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
@@ -34,6 +35,7 @@ class ReleaseRepositoryIntegrationTest {
                 new Environment("test", new JdbcTransactionFactory(), dataSource));
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(ReleaseMapper.class);
+        configuration.addMapper(OutboxMapper.class);
         try (SqlSession session = new SqlSessionFactoryBuilder().build(configuration).openSession(true)) {
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("""
@@ -87,6 +89,11 @@ class ReleaseRepositoryIntegrationTest {
                     assertThat(result.getInt(1)).isEqualTo(1);
                 }
             }
+            var pending = session.getMapper(OutboxMapper.class).findPending(10);
+            assertThat(pending).singleElement().satisfies(event -> {
+                assertThat(event.eventType()).isEqualTo("KNOWLEDGE_RELEASE_REQUESTED");
+                assertThat(event.taskId()).isPositive();
+            });
         }
     }
 }

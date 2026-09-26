@@ -13,6 +13,9 @@ import com.xjjk.knowledge.retrieval.indexing.IndexRecoveryMapper;
 import com.xjjk.knowledge.retrieval.service.PublishedVersionMapper;
 import com.xjjk.knowledge.retrieval.service.SearchLogMapper;
 import com.xjjk.knowledge.publication.PublicationMapper;
+import com.xjjk.knowledge.publication.cleanup.DerivedCleanupMapper;
+import com.xjjk.knowledge.publication.release.ReleaseMapper;
+import com.xjjk.knowledge.publication.release.ReleaseTaskMapper;
 import com.xjjk.knowledge.retrieval.service.DraftVersionMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -76,6 +79,15 @@ class KnowledgeServiceApplicationTest {
 
     @MockitoBean
     private PublicationMapper publicationMapper;
+
+    @MockitoBean
+    private DerivedCleanupMapper derivedCleanupMapper;
+
+    @MockitoBean
+    private ReleaseMapper releaseMapper;
+
+    @MockitoBean
+    private ReleaseTaskMapper releaseTaskMapper;
 
     @MockitoBean
     private DraftVersionMapper draftVersionMapper;
