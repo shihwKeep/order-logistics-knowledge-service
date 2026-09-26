@@ -10,6 +10,13 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface IngestionArtifactMapper {
+    @Select("""
+            SELECT EXISTS(
+                SELECT 1 FROM kb_document_version
+                 WHERE source_object_key=#{objectKey})
+            """)
+    boolean isSourceObjectReferenced(@Param("objectKey") String objectKey);
+
     @Insert("""
             INSERT IGNORE INTO kb_ingestion_task
               (tenant_id,knowledge_base_id,document_id,version_id,task_key,stage,status)
@@ -157,4 +164,22 @@ public interface IngestionArtifactMapper {
             @Param("leaseToken") String leaseToken,
             @Param("stage") String stage,
             @Param("errorCode") String errorCode);
+
+    @Insert("""
+            INSERT IGNORE INTO kb_derived_index_cleanup
+              (tenant_id,knowledge_base_id,document_id,version_id,index_layer,cleanup_reason,status)
+            SELECT v.tenant_id,v.knowledge_base_id,v.document_id,v.id,
+                   'DRAFT','INGESTION_FAILED','PENDING'
+              FROM kb_document_version v
+              JOIN kb_ingestion_task t
+                ON t.tenant_id=v.tenant_id AND t.version_id=v.id
+             WHERE t.id=#{taskId} AND t.status='DEAD'
+               AND v.tenant_id=#{tenantId} AND v.document_id=#{documentId} AND v.id=#{versionId}
+               AND v.status='FAILED'
+            """)
+    int insertFinalFailureCleanup(
+            @Param("tenantId") long tenantId,
+            @Param("documentId") long documentId,
+            @Param("versionId") long versionId,
+            @Param("taskId") long taskId);
 }

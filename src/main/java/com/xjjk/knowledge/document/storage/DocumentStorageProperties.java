@@ -1,5 +1,6 @@
 package com.xjjk.knowledge.document.storage;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
@@ -11,6 +12,9 @@ public class DocumentStorageProperties {
     private String secretKey;
     private String bucket = "knowledge-documents";
     private DataSize maxFileSize = DataSize.ofMegabytes(30);
+    private boolean orphanScanEnabled;
+    private Duration orphanSafetyWindow = Duration.ofHours(24);
+    private int orphanScanBatchSize = 100;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -24,4 +28,10 @@ public class DocumentStorageProperties {
     public void setBucket(String bucket) { this.bucket = bucket; }
     public DataSize getMaxFileSize() { return maxFileSize; }
     public void setMaxFileSize(DataSize maxFileSize) { this.maxFileSize = maxFileSize; }
+    public boolean isOrphanScanEnabled() { return orphanScanEnabled; }
+    public void setOrphanScanEnabled(boolean orphanScanEnabled) { this.orphanScanEnabled = orphanScanEnabled; }
+    public Duration getOrphanSafetyWindow() { return orphanSafetyWindow; }
+    public void setOrphanSafetyWindow(Duration orphanSafetyWindow) { this.orphanSafetyWindow = orphanSafetyWindow; }
+    public int getOrphanScanBatchSize() { return orphanScanBatchSize; }
+    public void setOrphanScanBatchSize(int orphanScanBatchSize) { this.orphanScanBatchSize = orphanScanBatchSize; }
 }

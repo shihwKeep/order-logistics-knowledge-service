@@ -1,6 +1,8 @@
 package com.xjjk.knowledge.document.storage;
 
 import java.io.InputStream;
+import java.time.Instant;
+import java.util.List;
 
 /** 原件和解析产物存储边界；调用者只能传入后端生成的对象键。 */
 public interface SourceObjectStore {
@@ -9,4 +11,14 @@ public interface SourceObjectStore {
     InputStream get(String objectKey);
 
     void putParsed(String objectKey, byte[] content, String contentType);
+
+    /** 受限枚举早于安全时间窗的原文件对象；实现必须限制返回数量。 */
+    default List<StoredSourceObject> listSourceObjectsOlderThan(Instant cutoff, int limit) {
+        return List.of();
+    }
+
+    /** 删除后端生成的对象键；重复删除必须视为成功。 */
+    default void delete(String objectKey) {
+        throw new UnsupportedOperationException("object deletion is not supported");
+    }
 }

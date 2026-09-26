@@ -142,9 +142,13 @@ public class IngestionWorker {
             boolean canRetry = version == null
                     || artifacts.markFailedIfOwned(version, lease, lease.stage(), code);
             if (canRetry) {
-                tasks.fail(
+                boolean failed = tasks.fail(
                         lease.taskId(), lease.leaseToken(), code, exception.getMessage(),
                         properties.getMaxRetries(), properties.getRetryBaseDelay());
+                if (failed && version != null) {
+                    // Mapper 内部仅在任务已进入 DEAD 时登记；普通 RETRY 不会提前删除可复用索引。
+                    artifacts.registerFinalFailureCleanup(version, lease);
+                }
             } else {
                 // 同一版本已进入更新修订或终态，当前任务已过期，直接结束其租约。
                 tasks.complete(lease.taskId(), lease.leaseToken());

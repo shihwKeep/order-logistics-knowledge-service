@@ -80,6 +80,17 @@ public class IngestionArtifactRepository {
                 lease.taskId(), lease.leaseToken(), stage, errorCode) == 1;
     }
 
+    /** MinIO 孤儿扫描只删除数据库中不存在任何版本引用的 source 对象。 */
+    public boolean isSourceObjectReferenced(String objectKey) {
+        return mapper.isSourceObjectReferenced(objectKey);
+    }
+
+    /** 普通重试不清理索引；只有任务耗尽重试进入 DEAD 后才登记幂等清理任务。 */
+    public boolean registerFinalFailureCleanup(DocumentVersion version, IngestionTaskLease lease) {
+        return mapper.insertFinalFailureCleanup(
+                version.tenantId(), version.documentId(), version.id(), lease.taskId()) == 1;
+    }
+
     private void insertChunks(DocumentVersion version, List<DocumentChunk> chunks, Map<Integer, Long> unitIds) {
         for (DocumentChunk chunk : chunks) {
             Long unitId = unitIds.get(chunk.sourceUnitIndex());
