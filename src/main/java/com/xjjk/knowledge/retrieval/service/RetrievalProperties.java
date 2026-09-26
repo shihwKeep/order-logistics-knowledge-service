@@ -10,13 +10,15 @@ public class RetrievalProperties {
     private int recallTopK = 30;
     private int fusionTopK = 10;
     private int finalTopK = 5;
+    private int releaseFilterBatchSize = 200;
     private double vectorWeight = 1D;
     private double keywordWeight = 1D;
     private String version = "qwen37-es-milvus-rrf60-rerank-v3";
 
     @PostConstruct
-    void validate() {
+    public void validate() {
         if (recallTopK <= 0 || fusionTopK <= 0 || finalTopK <= 0
+                || releaseFilterBatchSize <= 0
                 || vectorWeight <= 0D || keywordWeight <= 0D
                 || version == null || version.isBlank()) {
             throw new IllegalArgumentException("知识检索策略配置不合法");
@@ -29,6 +31,10 @@ public class RetrievalProperties {
     public void setFusionTopK(int fusionTopK) { this.fusionTopK = fusionTopK; }
     public int getFinalTopK() { return finalTopK; }
     public void setFinalTopK(int finalTopK) { this.finalTopK = finalTopK; }
+    public int getReleaseFilterBatchSize() { return releaseFilterBatchSize; }
+    public void setReleaseFilterBatchSize(int releaseFilterBatchSize) {
+        this.releaseFilterBatchSize = releaseFilterBatchSize;
+    }
     public double getVectorWeight() { return vectorWeight; }
     public void setVectorWeight(double vectorWeight) { this.vectorWeight = vectorWeight; }
     public double getKeywordWeight() { return keywordWeight; }

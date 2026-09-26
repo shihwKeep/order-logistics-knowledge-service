@@ -31,6 +31,10 @@ knowledge:
   document:
     ingestion:
       budget-retry-delay: 1h
+  retrieval:
+    strategy:
+      # ACTIVE Release 文档版本范围过大时，ES/Milvus 按批构造精确过滤条件。
+      release-filter-batch-size: 200
   cloud-model:
     enabled: true
     region: cn-beijing

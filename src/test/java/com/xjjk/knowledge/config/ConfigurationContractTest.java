@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ConfigurationContractTest {
 
@@ -77,5 +78,17 @@ class ConfigurationContractTest {
         assertThat(new RetrievalProperties().getFusionTopK()).isEqualTo(10);
         assertThat(new RetrievalProperties().getVersion()).isEqualTo("qwen37-es-milvus-rrf60-rerank-v3");
         assertThat(new BailianModelProperties().getReadTimeout()).isEqualTo(java.time.Duration.ofSeconds(30));
+    }
+
+    @Test
+    void releaseScopeFilterBatchMustBePositive() {
+        RetrievalProperties properties = new RetrievalProperties();
+        assertThat(properties.getReleaseFilterBatchSize()).isEqualTo(200);
+
+        properties.setReleaseFilterBatchSize(0);
+
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("知识检索策略配置不合法");
     }
 }
