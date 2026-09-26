@@ -81,6 +81,19 @@ class ReleaseWorkerTest {
         verify(tasks).complete(lease);
     }
 
+    @Test
+    void reusesPublishedIndexesWhenBothStoresMatchMysqlManifest() {
+        DocumentVersion version = version(11L, 91L);
+        when(releases.changedVersions(release)).thenReturn(List.of(version));
+        when(indexes.isPublishedReady(version)).thenReturn(true);
+
+        assertThat(worker.process(70L)).isTrue();
+
+        verify(indexes, never()).preparePublished(version);
+        verify(releases).activate(release, lease);
+        verify(tasks).complete(lease);
+    }
+
     private static DocumentVersion version(long documentId, long versionId) {
         LocalDateTime now = LocalDateTime.now();
         return new DocumentVersion(

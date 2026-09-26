@@ -44,12 +44,12 @@ public interface DerivedCleanupMapper {
 
     @Select("""
             SELECT CASE WHEN
-                 EXISTS (
+                 (#{task.layer}='DRAFT' AND EXISTS (
                     SELECT 1 FROM kb_document d
                      WHERE d.tenant_id=#{task.tenantId} AND d.knowledge_base_id=#{task.knowledgeBaseId}
                        AND d.id=#{task.documentId} AND d.is_deleted=0
-                       AND d.current_draft_version_id=#{task.versionId})
-                 OR EXISTS (
+                       AND d.current_draft_version_id=#{task.versionId}))
+                 OR (#{task.layer}='PUBLISHED' AND EXISTS (
                     SELECT 1
                       FROM kb_knowledge_base kb
                       JOIN kb_release_item item
@@ -58,7 +58,7 @@ public interface DerivedCleanupMapper {
                        AND item.knowledge_base_id=kb.id
                      WHERE kb.tenant_id=#{task.tenantId} AND kb.id=#{task.knowledgeBaseId}
                        AND item.document_id=#{task.documentId}
-                       AND item.version_id=#{task.versionId})
+                       AND item.version_id=#{task.versionId}))
                  THEN 1 ELSE 0 END
             """)
     @Options(useCache = false, flushCache = Options.FlushCachePolicy.TRUE)

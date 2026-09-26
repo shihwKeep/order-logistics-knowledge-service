@@ -26,7 +26,7 @@ class DerivedCleanupRepositoryIntegrationTest {
             .withPassword("knowledge");
 
     @Test
-    void leasesTaskMapsLayerAndProtectsCurrentDraftAndReleaseReferences() throws Exception {
+    void referenceGateChecksOnlyTheIndexLayerBeingDeleted() throws Exception {
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .load().migrate();
         PooledDataSource dataSource = new PooledDataSource(
@@ -58,7 +58,9 @@ class DerivedCleanupRepositoryIntegrationTest {
                         INSERT INTO kb_derived_index_cleanup(
                           id,tenant_id,knowledge_base_id,document_id,version_id,index_layer,
                           cleanup_reason,status)
-                        VALUES(7,1,2,3,4,'DRAFT','DRAFT_REPLACED','PENDING')
+                        VALUES
+                          (7,1,2,3,4,'DRAFT','DRAFT_REPLACED','PENDING'),
+                          (8,1,2,3,4,'PUBLISHED','RELEASE_SUPERSEDED','PENDING')
                         """);
             }
             DerivedCleanupRepository repository = new DerivedCleanupRepository(
@@ -85,13 +87,21 @@ class DerivedCleanupRepositoryIntegrationTest {
                         """);
                 statement.executeUpdate("UPDATE kb_knowledge_base SET current_release_id=9 WHERE id=2");
             }
-            assertThat(repository.isReferenced(task)).isTrue();
+            // ACTIVE Release 只保护正式层；草稿指针已经清空，因此草稿层现在可以删除。
+            assertThat(repository.isReferenced(task)).isFalse();
+
+            DerivedCleanupTask publishedTask = repository.claim(
+                    8L, "test-worker", Duration.ofMinutes(1)).orElseThrow();
+            assertThat(publishedTask.layer()).isEqualTo(IndexLayer.PUBLISHED);
+            assertThat(repository.isReferenced(publishedTask)).isTrue();
 
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("UPDATE kb_knowledge_base SET current_release_id=NULL WHERE id=2");
             }
-            assertThat(repository.isReferenced(task)).isFalse();
+            assertThat(repository.isReferenced(publishedTask)).isFalse();
             assertThat(repository.completeOwned(task.id(), task.leaseToken())).isTrue();
+            assertThat(repository.completeOwned(
+                    publishedTask.id(), publishedTask.leaseToken())).isTrue();
         }
     }
 }

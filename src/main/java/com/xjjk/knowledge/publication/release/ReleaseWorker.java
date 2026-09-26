@@ -46,7 +46,9 @@ public class ReleaseWorker {
         }
         try {
             for (DocumentVersion version : releases.changedVersions(release)) {
-                indexes.preparePublished(version);
+                if (!indexes.isPublishedReady(version)) {
+                    indexes.preparePublished(version);
+                }
                 if (!tasks.renew(lease, properties.getLeaseDuration())) {
                     throw new IllegalStateException("Release 任务租约已经丢失");
                 }

@@ -38,6 +38,24 @@ public class PublicationIndexService {
         prepare(version, IndexLayer.PUBLISHED, true);
     }
 
+    /**
+     * 回滚历史 Release 前先比对 MySQL Chunk 指纹与 ES/Milvus 正式层。
+     * Index/Collection 不存在时先创建空结构，随后返回 false 触发幂等重建。
+     */
+    public boolean isPublishedReady(DocumentVersion version) {
+        List<IndexChunk> values = loadValidatedChunks(version, true);
+        keywordIndex.ensureReady();
+        vectorIndex.ensureReady();
+        Map<String, String> expected = IndexManifest.fingerprints(values);
+        Map<String, String> keywordActual = keywordIndex.verifyVersion(
+                IndexLayer.PUBLISHED, version.tenantId(), version.documentId(), version.id())
+                .fingerprints();
+        Map<String, String> vectorActual = vectorIndex.verifyVersion(
+                IndexLayer.PUBLISHED, version.tenantId(), version.documentId(), version.id())
+                .fingerprints();
+        return expected.equals(keywordActual) && expected.equals(vectorActual);
+    }
+
     /** 灾备恢复时依据 MySQL Chunk 重建当前草稿层，不改变草稿状态。 */
     public void prepareDraft(DocumentVersion version) {
         prepare(version, IndexLayer.DRAFT, true);
@@ -54,17 +72,7 @@ public class PublicationIndexService {
     }
 
     private void prepare(DocumentVersion version, IndexLayer layer, boolean requireCurrentContract) {
-        if (requireCurrentContract) {
-            validateEmbeddingContract(version);
-        }
-        List<IndexChunk> values = chunks.loadVersionChunks(version);
-        if (values.isEmpty() || values.size() != version.chunkCount()) {
-            throw new IllegalStateException("待恢复版本的 MySQL Chunk 数量不一致");
-        }
-        String manifest = IndexManifest.sha256(values);
-        if (!manifest.equals(version.indexManifestSha256())) {
-            throw new IllegalStateException("发布版本内容清单已经变化，必须重新生成草稿索引");
-        }
+        List<IndexChunk> values = loadValidatedChunks(version, requireCurrentContract);
         List<List<Float>> vectors = embeddings.embedDocuments(
                 values.stream().map(IndexChunk::content).toList());
         keywordIndex.ensureReady();
@@ -80,6 +88,22 @@ public class PublicationIndexService {
         if (!expected.equals(keywordActual) || !expected.equals(vectorActual)) {
             throw new IllegalStateException(layer + " 层 ES/Milvus 索引校验未通过");
         }
+    }
+
+    private List<IndexChunk> loadValidatedChunks(
+            DocumentVersion version, boolean requireCurrentContract) {
+        if (requireCurrentContract) {
+            validateEmbeddingContract(version);
+        }
+        List<IndexChunk> values = chunks.loadVersionChunks(version);
+        if (values.isEmpty() || values.size() != version.chunkCount()) {
+            throw new IllegalStateException("待恢复版本的 MySQL Chunk 数量不一致");
+        }
+        String manifest = IndexManifest.sha256(values);
+        if (!manifest.equals(version.indexManifestSha256())) {
+            throw new IllegalStateException("发布版本内容清单已经变化，必须重新生成草稿索引");
+        }
+        return values;
     }
 
     public void deletePublished(long tenantId, long documentId, long versionId) {
