@@ -9,7 +9,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 返回证据前以 MySQL 发布指针进行最后一次批量校验，阻断索引延迟删除造成的旧版本泄漏。
+ * 返回证据前以 MySQL 当前 ACTIVE Release 清单进行最后一次批量校验，
+ * 阻断预写版本、旧 Release 和冲突 Release 的索引数据泄漏到线上回答。
  */
 @Component
 public class PublishedVersionValidator {

@@ -13,11 +13,20 @@ public interface IndexRecoveryMapper {
 
     @Select("""
             SELECT v.*
-              FROM kb_document d
+              FROM kb_knowledge_base kb
+              JOIN kb_release active_release
+                ON active_release.id=kb.current_release_id
+               AND active_release.tenant_id=kb.tenant_id
+               AND active_release.knowledge_base_id=kb.id
+               AND active_release.status='ACTIVE'
+              JOIN kb_release_item item
+                ON item.release_id=active_release.id
+               AND item.tenant_id=kb.tenant_id
+               AND item.knowledge_base_id=kb.id
               JOIN kb_document_version v
-                ON v.tenant_id=d.tenant_id AND v.document_id=d.id
-               AND v.id=d.current_published_version_id
-             WHERE d.is_deleted=0 AND d.current_published_version_id IS NOT NULL
+                ON v.tenant_id=item.tenant_id AND v.knowledge_base_id=item.knowledge_base_id
+               AND v.document_id=item.document_id AND v.id=item.version_id
+             WHERE kb.is_deleted=0 AND kb.status='ENABLED'
                AND v.index_manifest_sha256 IS NOT NULL
              ORDER BY v.tenant_id,v.document_id,v.id
             """)

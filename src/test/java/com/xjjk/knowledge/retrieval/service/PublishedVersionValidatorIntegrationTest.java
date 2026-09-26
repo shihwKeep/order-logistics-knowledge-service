@@ -28,7 +28,7 @@ class PublishedVersionValidatorIntegrationTest {
             .withDatabaseName("order_logistics_knowledge").withUsername("knowledge").withPassword("knowledge");
 
     @Test
-    void acceptsOnlyCurrentPublishedVersionFromEnabledKnowledgeBase() throws Exception {
+    void acceptsOnlyItemsFromCurrentActiveRelease() throws Exception {
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()).load().migrate();
         PooledDataSource dataSource = new PooledDataSource(
                 "com.mysql.cj.jdbc.Driver", MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
@@ -45,16 +45,36 @@ class PublishedVersionValidatorIntegrationTest {
                         INSERT INTO kb_document(id,tenant_id,knowledge_base_id,title,current_published_version_id,created_by,updated_by)
                         VALUES(3,1,2,'退款规则',10,1,1)
                         """);
+                statement.executeUpdate("""
+                        INSERT INTO kb_release(
+                          id,tenant_id,knowledge_base_id,release_number,status,base_release_id,
+                          request_id,manifest_sha256,base_row_version,created_by)
+                        VALUES
+                          (19,1,2,1,'SUPERSEDED',NULL,'release-old',REPEAT('a',64),0,1),
+                          (20,1,2,2,'ACTIVE',19,'release-active',REPEAT('b',64),0,1),
+                          (21,1,2,3,'CONFLICT',20,'release-conflict',REPEAT('c',64),0,1)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO kb_release_item(
+                          release_id,tenant_id,knowledge_base_id,document_id,version_id,content_manifest_sha256)
+                        VALUES
+                          (19,1,2,3,9,REPEAT('d',64)),
+                          (20,1,2,3,11,REPEAT('e',64)),
+                          (21,1,2,3,12,REPEAT('f',64))
+                        """);
+                statement.executeUpdate(
+                        "UPDATE kb_knowledge_base SET current_release_id=20 WHERE tenant_id=1 AND id=2");
             }
             PublishedVersionValidator validator = new PublishedVersionValidator(session.getMapper(PublishedVersionMapper.class));
 
-            List<RankedEvidence> result = validator.validate(1L, List.of(evidence(10L), evidence(9L)));
+            List<RankedEvidence> result = validator.validate(
+                    1L, List.of(evidence(11L), evidence(10L), evidence(9L), evidence(12L)));
 
-            assertThat(result).extracting(item -> item.chunk().versionId()).containsExactly(10L);
+            assertThat(result).extracting(item -> item.chunk().versionId()).containsExactly(11L);
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("UPDATE kb_knowledge_base SET status='DISABLED' WHERE tenant_id=1 AND id=2");
             }
-            assertThat(validator.validate(1L, List.of(evidence(10L)))).isEmpty();
+            assertThat(validator.validate(1L, List.of(evidence(11L)))).isEmpty();
         }
     }
 
