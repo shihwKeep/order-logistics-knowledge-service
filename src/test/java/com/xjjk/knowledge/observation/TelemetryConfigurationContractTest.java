@@ -21,4 +21,18 @@ class TelemetryConfigurationContractTest {
                     .contains("endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}");
         }
     }
+
+    @Test
+    void shouldUseStructuredLogConfiguration() throws IOException {
+        try (InputStream input = getClass().getResourceAsStream("/logback-spring.xml")) {
+            assertThat(input).isNotNull();
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(xml)
+                    .contains("LogstashEncoder")
+                    .contains("traceId")
+                    .contains("spanId")
+                    .contains("requestId")
+                    .contains("OBSERVABILITY_LOG_DIR");
+        }
+    }
 }
