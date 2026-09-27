@@ -10,8 +10,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
@@ -26,7 +28,8 @@ public class SecurityConfiguration {
     SecurityFilterChain knowledgeSecurityFilterChain(
             HttpSecurity http,
             AdminSessionFilter adminSessionFilter,
-            ObjectMapper objectMapper) throws Exception {
+            ObjectMapper objectMapper,
+            @Value("${management.server.port:18085}") int managementPort) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookieName("XSRF-TOKEN");
         csrfRepository.setHeaderName("X-XSRF-TOKEN");
@@ -44,9 +47,13 @@ public class SecurityConfiguration {
                         .ignoringRequestMatchers("/api/v1/internal/**"))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                        // 指标可能暴露内部容量与故障状态，只允许超级管理员会话读取。
+                        // 指标只在独立管理端口暴露；业务端口仍要求超级管理员会话。
                         .requestMatchers("/actuator/prometheus")
-                        .hasRole("KNOWLEDGE_SUPER_ADMIN")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                context.getRequest().getLocalPort() == managementPort
+                                        || authentication.get().getAuthorities().stream()
+                                        .anyMatch(authority -> "ROLE_KNOWLEDGE_SUPER_ADMIN"
+                                                .equals(authority.getAuthority()))))
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/internal/knowledge/retrieve").permitAll()

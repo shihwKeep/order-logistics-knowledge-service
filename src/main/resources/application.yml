@@ -8,6 +8,10 @@ server:
   port: ${KNOWLEDGE_SERVER_PORT:8084}
 
 management:
+  # 指标和健康检查使用独立管理端口，避免与管理端业务鉴权入口混用。
+  server:
+    port: ${KNOWLEDGE_MANAGEMENT_PORT:18085}
+    address: ${MANAGEMENT_SERVER_ADDRESS:0.0.0.0}
   endpoint:
     health:
       show-details: when_authorized
