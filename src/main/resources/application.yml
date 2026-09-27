@@ -11,6 +11,8 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:
@@ -18,10 +20,24 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+      environment: ${DEPLOYMENT_ENVIRONMENT:local}
     distribution:
       percentiles-histogram:
+        http.server.requests: true
+        http.client.requests: true
         knowledge.retrieval.duration: true
         knowledge.ingestion.duration: true
+  tracing:
+    sampling:
+      probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:0.1}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}
+      connect-timeout: 2s
+      timeout: 5s
+  observations:
+    annotations:
+      enabled: true
 
 # 灾备恢复开关必须由维护命令显式打开，日常启动不能重复计算全库向量。
 knowledge:
