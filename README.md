@@ -177,11 +177,4 @@ src/main/java/com/xjjk/knowledge
 ├─ audit          管理操作审计查询
 ├─ observation    低基数业务指标
 └─ common         统一响应、错误码和异常处理
-
-src/main/resources/db/migration  Flyway 数据库迁移
-ocr-service                     独立 PaddleOCR HTTP 服务
-infra/elasticsearch             Elasticsearch IK 镜像
-evaluation                      中文检索 Golden Case 示例
-tools                           检索评测脚本
-docs                            运行、发布、恢复和验收手册
 ```
