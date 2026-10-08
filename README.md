@@ -156,14 +156,11 @@ X-Request-Id
 | 基础框架 | Java 21、Spring Boot 3.5、Spring Cloud、Spring Cloud Alibaba |
 | 数据与迁移 | MyBatis-Plus、MySQL、Flyway |
 | 状态与异步任务 | Redis、RabbitMQ、Outbox、任务租约 |
-| 对象存储 | MinIO |
 | 文档解析 | Apache PDFBox、Apache POI、Jsoup、Commons CSV、PaddleOCR |
 | 检索 | Elasticsearch 8、Milvus 2、BM25、向量检索、RRF |
 | 云模型 | 阿里云百炼 `qwen3.7-text-embedding`、`qwen3.7-text-rerank` |
 | 配置中心 | Nacos |
-| 安全 | Spring Security、SSPX OAuth、Redis Session、CSRF、HMAC-SHA256 |
 | 可观测性 | Micrometer、Prometheus、OpenTelemetry、结构化 JSON 日志 |
-| 工程化 | Maven、Docker Compose、JUnit 5、Testcontainers |
 
 ## 工程结构
 
