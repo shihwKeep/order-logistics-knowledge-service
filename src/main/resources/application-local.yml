@@ -15,6 +15,8 @@ spring:
     virtual-host: ${KNOWLEDGE_RABBITMQ_VHOST:/}
 
 knowledge:
+  user-memory:
+    enabled: true
   sspx:
     base-url: ${SSPX_BASE_URL:http://127.0.0.1:9092}
     client-id: ${SSPX_CLIENT_ID:100006}
@@ -24,7 +26,7 @@ knowledge:
     read-timeout: 4s
   admin-session:
     cookie-name: KB_ADMIN_SESSION
-    idle-timeout: 30m
+    idle-timeout: 8h
     absolute-timeout: 8h
     role-cache-ttl: 5m
     touch-interval: 1m
